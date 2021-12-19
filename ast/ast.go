@@ -16,11 +16,11 @@ type Program struct {
 type Rule struct {
 	Pos lexer.Position
 
-	Head Relation   `parser:"@@ ':-'"`
-	Body []Relation `parser:"@@ (',' @@)*"`
+	Head Atom   `parser:"@@ ':-'"`
+	Body []Atom `parser:"@@ (',' @@)*"`
 }
 
-type Relation struct {
+type Atom struct {
 	Pos       lexer.Position
 	Name      string     `parser:"@Var"`
 	Variables []Variable `parser:"'(' @@ (',' @@)* ')'"`
