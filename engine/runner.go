@@ -166,20 +166,7 @@ func (r *Runner) Step() {
 		nextLoc := "L1"
 		nextTime := 0
 
-		//var modified bool
-		//if len(rl.body) > 1 {
 		modified := join(rl, loc, time, nextLoc, nextTime)
-		//} else {
-		//d := make([]string, len(rl.head.indexes))
-		//for _, f := range rl.body[0].all(loc, time) {
-		//for i, v := range rl.headVarMapping {
-		//a := v.attrs[rl.body[0].id][0]
-		//d[i] = f.data[a.index]
-		//}
-		//fmt.Println(d)
-		//rl.head.push(d, nextLoc, nextTime)
-		//}
-		//}
 		if modified {
 			queue = append(queue, rl.head.rules...)
 		}
