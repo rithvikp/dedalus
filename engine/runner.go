@@ -7,14 +7,21 @@ import (
 )
 
 type fact struct {
-	data []string
+	data      []string
+	location  string
+	timestamp int
+}
+
+type locTime struct {
+	location  string
+	timestamp int
 }
 
 type relation struct {
 	id    string
 	rules []*rule
 
-	indexes []map[string][]*fact
+	indexes []map[string]map[locTime][]*fact
 }
 
 type attribute struct {
@@ -24,7 +31,7 @@ type attribute struct {
 
 type variable struct {
 	id    string
-	attrs []*attribute
+	attrs map[string][]*attribute
 }
 
 type rule struct {
@@ -34,23 +41,37 @@ type rule struct {
 
 	// The index in the head relation mapped to the corresponding variable in the body.
 	headVarMapping []*variable
-	joinVars       []*variable
-}
-
-type component struct {
-	rules []*rule
+	vars           map[string][]*variable
 }
 
 type Runner struct {
 	relations map[string]*relation
 
-	components []*component
+	rules []*rule
+
+	currentTimestamp int
+}
+
+func (f *fact) equals(other *fact) bool {
+	if len(f.data) != len(other.data) {
+		return false
+	} else if f.location != other.location {
+		return false
+	} else if f.timestamp != other.timestamp {
+		return false
+	}
+
+	for i := range f.data {
+		if f.data[i] != other.data[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func NewRunner(p *ast.Program) *Runner {
 	runner := Runner{
-		relations:  map[string]*relation{},
-		components: []*component{{}}, // There is always only a single component for now
+		relations: map[string]*relation{},
 	}
 
 	addRel := func(atom *ast.Atom, rl *rule) *relation {
@@ -61,10 +82,10 @@ func NewRunner(p *ast.Program) *Runner {
 			r = &relation{
 				id:      id,
 				rules:   []*rule{rl},
-				indexes: make([]map[string][]*fact, len(atom.Variables)),
+				indexes: make([]map[string]map[locTime][]*fact, len(atom.Variables)),
 			}
 			for i := range r.indexes {
-				r.indexes[i] = map[string][]*fact{}
+				r.indexes[i] = map[string]map[locTime][]*fact{}
 			}
 			runner.relations[id] = r
 		} else {
@@ -81,7 +102,7 @@ func NewRunner(p *ast.Program) *Runner {
 			headVarMapping: make([]*variable, len(astRule.Head.Variables)),
 		}
 		r.head = addRel(&astRule.Head, r)
-		runner.components[0].rules = append(runner.components[0].rules, r)
+		runner.rules = append(runner.rules, r)
 
 		headVars := map[string]int{}
 		for j, v := range astRule.Head.Variables {
@@ -89,10 +110,12 @@ func NewRunner(p *ast.Program) *Runner {
 		}
 
 		vars := map[string]*variable{}
+		r.vars = map[string][]*variable{}
 
 		for _, astAtom := range astRule.Body {
 			rel := addRel(&astAtom, r)
 			r.body = append(r.body, rel)
+			r.vars[astAtom.Name] = make([]*variable, len(astAtom.Variables))
 
 			for j, astVar := range astAtom.Variables {
 				a := &attribute{
@@ -100,90 +123,67 @@ func NewRunner(p *ast.Program) *Runner {
 					relation: rel,
 				}
 
-				if v, ok := vars[astVar.Name]; ok {
-					v.attrs = append(v.attrs, a)
+				var v *variable
+				var ok bool
+				if v, ok = vars[astVar.Name]; ok {
+					v.attrs[rel.id] = append(v.attrs[rel.id], a)
 				} else {
 					v = &variable{
 						id:    astVar.Name,
-						attrs: []*attribute{a},
+						attrs: map[string][]*attribute{rel.id: []*attribute{a}},
 					}
 					vars[v.id] = v
 					if index, ok := headVars[v.id]; ok {
 						r.headVarMapping[index] = v
 					}
 				}
-			}
-		}
-
-		for _, v := range vars {
-			if len(v.attrs) > 1 {
-				r.joinVars = append(r.joinVars, v)
+				r.vars[astAtom.Name][j] = v
 			}
 		}
 	}
 
-	runner.relations["in1"].push([]string{"a", "b"})
-	runner.relations["in1"].push([]string{"f", "b"})
-	runner.relations["in2"].push([]string{"b", "c"})
-	runner.relations["in2"].push([]string{"b", "e"})
+	//fmt.Println(runner.rules[0].vars["in1"][0].attrs["in1"][1])
+	runner.relations["in1"].push([]string{"a", "b"}, "L1", 0)
+	runner.relations["in1"].push([]string{"f", "b"}, "L1", 0)
+	//runner.relations["in1"].push([]string{"b", "b"}, "L1", 0)
+	runner.relations["in2"].push([]string{"b", "c"}, "L1", 0)
+	runner.relations["in2"].push([]string{"a", "b"}, "L1", 0)
+	//runner.relations["in2"].push([]string{"b", "e"}, "L1", 0)
 
 	return &runner
 }
 
 func (r *Runner) Step() {
 	var queue []*rule
-	for _, c := range r.components {
-		queue = append(queue, c.rules...)
-	}
+	queue = append(queue, r.rules...)
 
 	for len(queue) != 0 {
-		r := queue[0]
+		rl := queue[0]
 		queue = queue[1:]
 
-		modified := join(r.head, r.joinVars, r.headVarMapping)
+		loc := "L1"
+		time := r.currentTimestamp
+		nextLoc := "L1"
+		nextTime := 0
+
+		//var modified bool
+		//if len(rl.body) > 1 {
+		modified := join(rl, loc, time, nextLoc, nextTime)
+		//} else {
+		//d := make([]string, len(rl.head.indexes))
+		//for _, f := range rl.body[0].all(loc, time) {
+		//for i, v := range rl.headVarMapping {
+		//a := v.attrs[rl.body[0].id][0]
+		//d[i] = f.data[a.index]
+		//}
+		//fmt.Println(d)
+		//rl.head.push(d, nextLoc, nextTime)
+		//}
+		//}
 		if modified {
-			queue = append(queue, r.head.rules...)
-		}
-	}
-}
-
-func (r *relation) push(d []string) {
-	if r.contains(d) {
-		return
-	}
-
-	f := &fact{
-		data: d,
-	}
-
-	for i := range d {
-		r.indexes[i][d[i]] = append(r.indexes[i][d[i]], f)
-	}
-}
-
-func (r *relation) contains(d []string) bool {
-	if len(r.indexes) != len(d) {
-		return false
-	}
-
-	var factSet []*fact
-	var ok bool
-	if factSet, ok = r.indexes[0][d[0]]; !ok {
-		return false
-	}
-
-	for _, f := range factSet {
-		found := true
-		for i := range d {
-			if f.data[i] != d[i] {
-				found = false
-				break
-			}
-		}
-		if found {
-			return true
+			queue = append(queue, rl.head.rules...)
 		}
 	}
 
-	return false
+	r.currentTimestamp++
 }

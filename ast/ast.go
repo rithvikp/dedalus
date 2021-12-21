@@ -22,21 +22,25 @@ type Rule struct {
 
 type Atom struct {
 	Pos       lexer.Position
-	Name      string     `parser:"@Var"`
-	Variables []Variable `parser:"'(' @@ (',' @@)* ')'"`
+	Name      string     `parser:"@Ident"`
+	Variables []Variable `parser:"'(' (@@ ',')+"`
+	Loc       string     `parser:"@Loc ','"`
+	Time      string     `parser:"@Time')'"`
 }
 
 type Variable struct {
 	Pos  lexer.Position
-	Name string `parser:"@Var"`
+	Name string `parser:"@Ident"`
 }
 
 var (
 	lex = lexer.MustSimple([]lexer.Rule{
-		{"Var", `[a-z0-9]+\b`, nil},
+		{"Ident", `[a-z]([a-z0-9])*\b`, nil},
+		{"Loc", `L([0-9])+\b`, nil},
+		{"Time", `[A-Z]\b`, nil},
 		{"Oper", `[()]|:-`, nil},
 		{"Delim", `[,]`, nil},
-		{"EOL", `[\n]+`, nil},
+		{"EOL", `\\n+`, nil},
 		{"whitespace", `\s+`, nil},
 	})
 
