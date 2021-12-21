@@ -104,9 +104,9 @@ func NewRunner(p *ast.Program) *Runner {
 		r.head = addRel(&astRule.Head, r)
 		runner.rules = append(runner.rules, r)
 
-		headVars := map[string]int{}
+		headVars := map[string][]int{}
 		for j, v := range astRule.Head.Variables {
-			headVars[v.Name] = j
+			headVars[v.Name] = append(headVars[v.Name], j)
 		}
 
 		vars := map[string]*variable{}
@@ -130,11 +130,14 @@ func NewRunner(p *ast.Program) *Runner {
 				} else {
 					v = &variable{
 						id:    astVar.Name,
-						attrs: map[string][]*attribute{rel.id: []*attribute{a}},
+						attrs: map[string][]*attribute{rel.id: {a}},
 					}
 					vars[v.id] = v
-					if index, ok := headVars[v.id]; ok {
-						r.headVarMapping[index] = v
+				}
+
+				if indices, ok := headVars[v.id]; ok {
+					for _, k := range indices {
+						r.headVarMapping[k] = v
 					}
 				}
 				r.vars[astAtom.Name][j] = v
@@ -142,13 +145,15 @@ func NewRunner(p *ast.Program) *Runner {
 		}
 	}
 
-	//fmt.Println(runner.rules[0].vars["in1"][0].attrs["in1"][1])
 	runner.relations["in1"].push([]string{"a", "b"}, "L1", 0)
 	runner.relations["in1"].push([]string{"f", "b"}, "L1", 0)
-	//runner.relations["in1"].push([]string{"b", "b"}, "L1", 0)
 	runner.relations["in2"].push([]string{"b", "c"}, "L1", 0)
 	runner.relations["in2"].push([]string{"a", "b"}, "L1", 0)
-	//runner.relations["in2"].push([]string{"b", "e"}, "L1", 0)
+
+	//runner.relations["in1"].push([]string{"a", "a"}, "L1", 0)
+	//runner.relations["in1"].push([]string{"f", "b"}, "L1", 0)
+	//runner.relations["in2"].push([]string{"a", "a"}, "L1", 0)
+	//runner.relations["in2"].push([]string{"a", "b"}, "L1", 0)
 
 	return &runner
 }

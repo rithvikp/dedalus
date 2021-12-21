@@ -49,6 +49,7 @@ func join(rl *rule, loc string, time int, nextLoc string, nextTime int) bool {
 					if first {
 						newWorkingSet = matched
 					} else {
+						// TODO: Switched to a hashed setup
 						for _, f1 := range workingSet {
 							for _, f2 := range matched {
 								if f1.equals(f2) {

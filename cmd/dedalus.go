@@ -25,6 +25,9 @@ func Execute() error {
 func run(cmd *cobra.Command, args []string) {
 	program := `out(a,b,c,L1,T) :- in1(a,b,L1,T), in2(b,c,L1,T)
 out1(a,c,L1,T) :- out(a,b,c,L1,T)`
+
+	//program := `out(a,a,L1,T) :- in1(a,a,L1,T), in2(a,a,L1,T)`
+
 	p, err := ast.Parse(bytes.NewReader([]byte(program)))
 	if err != nil {
 		fmt.Printf("Unable to parse your program: %v\n", err)
