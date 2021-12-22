@@ -102,14 +102,17 @@ func join(rl *rule, loc string, time int, nextLoc string, nextTime int) bool {
 		fringe = nextFringe
 	}
 
+	modified := false
 	for _, fn := range fringe {
 		d := make([]string, len(rl.head.indexes))
 		for i, v := range rl.headVarMapping {
 			d[i] = fn.lockedVars[v]
 		}
-		fmt.Println(d)
-		rl.head.push(d, nextLoc, nextTime)
+		fmt.Println(d, nextLoc, nextTime)
+		if rl.head.push(d, nextLoc, nextTime) {
+			modified = true
+		}
 	}
 
-	return false
+	return modified
 }

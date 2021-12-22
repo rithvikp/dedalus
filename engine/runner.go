@@ -1,10 +1,41 @@
 package engine
 
 import (
+	"fmt"
 	"strconv"
 
+	"github.com/alecthomas/participle/v2/lexer"
 	"github.com/rithvikp/dedalus/ast"
 )
+
+type SemanticError struct {
+	Position lexer.Position
+	Message  string
+}
+
+func (e *SemanticError) Error() string {
+	return fmt.Sprintf("semantic error at %s: %s", e.Position.String(), e.Message)
+}
+
+func newSemanticError(msg string, pos lexer.Position) *SemanticError {
+	return &SemanticError{Position: pos, Message: msg}
+}
+
+type timeModel int
+
+const (
+	timeModelSame = iota
+	timeModelSuccessor
+	timeModelAsync
+)
+
+const (
+	successorRelationName = "successor"
+)
+
+var lateHandleAtoms = map[string]struct{}{
+	successorRelationName: struct{}{},
+}
 
 type fact struct {
 	data      []string
@@ -18,8 +49,8 @@ type locTime struct {
 }
 
 type relation struct {
-	id    string
-	rules []*rule
+	id        string
+	bodyRules []*rule
 
 	indexes []map[string]map[locTime][]*fact
 }
@@ -42,6 +73,13 @@ type rule struct {
 	// The index in the head relation mapped to the corresponding variable in the body.
 	headVarMapping []*variable
 	vars           map[string][]*variable
+
+	timeModel timeModel
+	bodyLoc   string
+	headLoc   string
+
+	bodyTimeVar string
+	headTimeVar string
 }
 
 type Runner struct {
@@ -69,39 +107,58 @@ func (f *fact) equals(other *fact) bool {
 	return true
 }
 
-func NewRunner(p *ast.Program) *Runner {
+func NewRunner(p *ast.Program) (*Runner, error) {
 	runner := Runner{
 		relations: map[string]*relation{},
 	}
 
-	addRel := func(atom *ast.Atom, rl *rule) *relation {
+	addRel := func(atom *ast.Atom, head bool, rl *rule) (*relation, error) {
 		id := atom.Name
 		var ok bool
 		var r *relation
 		if r, ok = runner.relations[id]; !ok {
 			r = &relation{
 				id:      id,
-				rules:   []*rule{rl},
-				indexes: make([]map[string]map[locTime][]*fact, len(atom.Variables)),
+				indexes: make([]map[string]map[locTime][]*fact, len(atom.Variables)-2),
 			}
 			for i := range r.indexes {
 				r.indexes[i] = map[string]map[locTime][]*fact{}
 			}
 			runner.relations[id] = r
+			if !head {
+				r.bodyRules = append(r.bodyRules, rl)
+			}
 		} else {
-			// TODO: confirm the number of attrs is constant in parsing
-			r.rules = append(r.rules, rl)
+			if len(r.indexes) != len(atom.Variables)-2 {
+				return nil, newSemanticError("the number of attributes must be constant for any given relation", atom.Pos)
+			}
+			if !head {
+				r.bodyRules = append(r.bodyRules, rl)
+			}
 		}
 
-		return r
+		return r, nil
 	}
 
 	for i, astRule := range p.Rules {
 		r := &rule{
 			id:             strconv.Itoa(i),
-			headVarMapping: make([]*variable, len(astRule.Head.Variables)),
+			headVarMapping: make([]*variable, len(astRule.Head.Variables)-2),
 		}
-		r.head = addRel(&astRule.Head, r)
+
+		astHeadVars := astRule.Head.Variables
+		if len(astHeadVars) < 2 {
+			return nil, newSemanticError("all non-replicated read-only relations must have time and location attributes", astRule.Head.Pos)
+		}
+
+		var err error
+		r.head, err = addRel(&astRule.Head, true, r)
+		if err != nil {
+			return nil, err
+		}
+		r.headLoc = astHeadVars[len(astHeadVars)-2].Name
+		r.headTimeVar = astHeadVars[len(astHeadVars)-1].Name
+
 		runner.rules = append(runner.rules, r)
 
 		headVars := map[string][]int{}
@@ -112,12 +169,47 @@ func NewRunner(p *ast.Program) *Runner {
 		vars := map[string]*variable{}
 		r.vars = map[string][]*variable{}
 
+		r.bodyLoc = ""
+		var lateAtoms []*ast.Atom
 		for _, astAtom := range astRule.Body {
-			rel := addRel(&astAtom, r)
+			if _, ok := lateHandleAtoms[astAtom.Name]; ok {
+				lateAtoms = append(lateAtoms, &astAtom)
+				continue
+			}
+
+			// TODO: Cleanup time/loc parsing (there are many -2's when looking at # of variables
+			// due to this issue).
+			if len(astAtom.Variables) < 2 {
+				return nil, newSemanticError("all non-replicated read-only relations must have time and location attributes", astRule.Head.Pos)
+			}
+
+			rel, err := addRel(&astAtom, false, r)
+			if err != nil {
+				return nil, err
+			}
+
 			r.body = append(r.body, rel)
-			r.vars[astAtom.Name] = make([]*variable, len(astAtom.Variables))
+			r.vars[astAtom.Name] = make([]*variable, len(astAtom.Variables)-2)
+
+			atomLoc := astAtom.Variables[len(astAtom.Variables)-2].Name
+			if r.bodyLoc == "" {
+				r.bodyLoc = atomLoc
+			} else if atomLoc != r.bodyLoc {
+				return nil, newSemanticError("the location in all body atoms (where applicable) must be the same", astRule.Pos)
+			}
+
+			atomTime := astAtom.Variables[len(astAtom.Variables)-1].Name
+			if r.bodyTimeVar == "" {
+				r.bodyTimeVar = atomTime
+			} else if atomTime != r.bodyTimeVar {
+				return nil, newSemanticError("the time in all body atoms (where applicable) must be the same", astRule.Pos)
+			}
 
 			for j, astVar := range astAtom.Variables {
+				if j >= len(astAtom.Variables)-2 {
+					break
+				}
+
 				a := &attribute{
 					index:    j,
 					relation: rel,
@@ -143,6 +235,16 @@ func NewRunner(p *ast.Program) *Runner {
 				r.vars[astAtom.Name][j] = v
 			}
 		}
+
+		for _, astAtom := range lateAtoms {
+			switch astAtom.Name {
+			case successorRelationName:
+				if len(astAtom.Variables) != 2 || astAtom.Variables[0].Name != r.bodyTimeVar || astAtom.Variables[1].Name != r.headTimeVar {
+					return nil, newSemanticError("incorrectly formatted successor relation", astAtom.Pos)
+				}
+				r.timeModel = timeModelSuccessor
+			}
+		}
 	}
 
 	runner.relations["in1"].push([]string{"a", "b"}, "L1", 0)
@@ -155,7 +257,7 @@ func NewRunner(p *ast.Program) *Runner {
 	//runner.relations["in2"].push([]string{"a", "a"}, "L1", 0)
 	//runner.relations["in2"].push([]string{"a", "b"}, "L1", 0)
 
-	return &runner
+	return &runner, nil
 }
 
 func (r *Runner) Step() {
@@ -166,14 +268,23 @@ func (r *Runner) Step() {
 		rl := queue[0]
 		queue = queue[1:]
 
-		loc := "L1"
 		time := r.currentTimestamp
-		nextLoc := "L1"
-		nextTime := 0
+		loc := rl.bodyLoc
+		nextLoc := rl.headLoc
+
+		var nextTime int
+		switch rl.timeModel {
+		case timeModelSame:
+			nextTime = time
+		case timeModelSuccessor:
+			nextTime = time + 1
+		case timeModelAsync:
+			nextTime = time + 1 // TODO
+		}
 
 		modified := join(rl, loc, time, nextLoc, nextTime)
 		if modified {
-			queue = append(queue, rl.head.rules...)
+			queue = append(queue, rl.head.bodyRules...)
 		}
 	}
 
