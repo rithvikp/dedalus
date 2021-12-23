@@ -2,6 +2,7 @@ package engine
 
 import (
 	"fmt"
+	"math/rand"
 	"strconv"
 
 	"github.com/alecthomas/participle/v2/lexer"
@@ -31,10 +32,12 @@ const (
 
 const (
 	successorRelationName = "successor"
+	chooseRelationName    = "choose"
 )
 
 var lateHandleAtoms = map[string]struct{}{
-	successorRelationName: struct{}{},
+	successorRelationName: {},
+	chooseRelationName:    {},
 }
 
 type fact struct {
@@ -243,6 +246,10 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 					return nil, newSemanticError("incorrectly formatted successor relation", astAtom.Pos)
 				}
 				r.timeModel = timeModelSuccessor
+
+			case chooseRelationName:
+				// TODO: Validate + switch to the correct syntax
+				r.timeModel = timeModelAsync
 			}
 		}
 	}
@@ -262,10 +269,16 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 
 func (r *Runner) Step() {
 	var queue []*rule
+	inQueue := map[string]struct{}{}
 	queue = append(queue, r.rules...)
+
+	for _, rl := range queue {
+		inQueue[rl.id] = struct{}{}
+	}
 
 	for len(queue) != 0 {
 		rl := queue[0]
+		delete(inQueue, rl.id)
 		queue = queue[1:]
 
 		time := r.currentTimestamp
@@ -279,12 +292,16 @@ func (r *Runner) Step() {
 		case timeModelSuccessor:
 			nextTime = time + 1
 		case timeModelAsync:
-			nextTime = time + 1 // TODO
+			nextTime = time + rand.Intn(5) // TODO
 		}
 
 		modified := join(rl, loc, time, nextLoc, nextTime)
 		if modified {
-			queue = append(queue, rl.head.bodyRules...)
+			for _, bodyRule := range rl.head.bodyRules {
+				if _, ok := inQueue[bodyRule.id]; !ok {
+					queue = append(queue)
+				}
+			}
 		}
 	}
 

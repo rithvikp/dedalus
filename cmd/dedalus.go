@@ -24,7 +24,7 @@ func Execute() error {
 
 func run(cmd *cobra.Command, args []string) {
 	program := `out(a,b,c,L1,T) :- in1(a,b,L1,T), in2(b,c,L1,T)
-out(a,b,c,L1,S) :- out(a,b,c,L1,T), successor(T,S)`
+	out(a,b,c,L1,S) :- out(a,b,c,L1,T), successor(T,S)`
 
 	//program := `out(a,a,L1,T) :- in1(a,a,L1,T), in2(a,a,L1,T)`
 
