@@ -1,13 +1,11 @@
 package engine
 
-import "fmt"
-
 type factNode struct {
 	lockedVars map[*variable]string
 }
 
 // This is EXTREMELY hacky/non-clean code, but it works as a proof of concept.
-func join(rl *rule, loc string, time int, nextLoc string, nextTime int) bool {
+func join(rl *rule, loc string, time int) [][]string {
 	lt := locTime{loc, time}
 
 	var fringe []*factNode
@@ -102,17 +100,14 @@ func join(rl *rule, loc string, time int, nextLoc string, nextTime int) bool {
 		fringe = nextFringe
 	}
 
-	modified := false
-	for _, fn := range fringe {
+	data := make([][]string, len(fringe))
+	for i, fn := range fringe {
 		d := make([]string, len(rl.head.indexes))
-		for i, v := range rl.headVarMapping {
-			d[i] = fn.lockedVars[v]
+		for j, v := range rl.headVarMapping {
+			d[j] = fn.lockedVars[v]
 		}
-		fmt.Println(rl.head.id+":", d, nextLoc, nextTime)
-		if rl.head.push(d, nextLoc, nextTime) {
-			modified = true
-		}
+		data[i] = d
 	}
 
-	return modified
+	return data
 }

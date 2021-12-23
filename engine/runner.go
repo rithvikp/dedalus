@@ -1,9 +1,12 @@
 package engine
 
 import (
+	"crypto/md5"
 	"fmt"
+	"math/big"
 	"math/rand"
 	"strconv"
+	"strings"
 
 	"github.com/alecthomas/participle/v2/lexer"
 	"github.com/rithvikp/dedalus/ast"
@@ -248,9 +251,10 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 				r.timeModel = timeModelSuccessor
 
 			case chooseRelationName:
-				// TODO: Validate + switch to the correct syntax
 				if len(astAtom.Variables) != 2 {
 					return nil, newSemanticError("choose relations must have exactly two attributes", astAtom.Pos)
+				} else if astAtom.Variables[1].Name != r.headTimeVar {
+					return nil, newSemanticError("the second variable in choose relations must be the head relation's time variable", astAtom.Variables[1].Pos)
 				}
 
 				t := astAtom.Variables[0].NameTuple
@@ -299,17 +303,34 @@ func (r *Runner) Step() {
 		loc := rl.bodyLoc
 		nextLoc := rl.headLoc
 
-		var nextTime int
-		switch rl.timeModel {
-		case timeModelSame:
-			nextTime = time
-		case timeModelSuccessor:
-			nextTime = time + 1
-		case timeModelAsync:
-			nextTime = time + rand.Intn(5) // TODO
+		data := join(rl, loc, time)
+		modified := false
+		for _, d := range data {
+			var nextTime int
+			switch rl.timeModel {
+			case timeModelSame:
+				nextTime = time
+			case timeModelSuccessor:
+				nextTime = time + 1
+			case timeModelAsync:
+				combined := strings.Join(d, ";")
+				b := big.NewInt(0)
+				h := md5.New()
+				h.Write([]byte(combined))
+
+				// h.Sum(nil) has a fixed size (md5.Size).
+				b.SetBytes(h.Sum(nil)[:7])
+
+				randSrc := rand.NewSource(b.Int64())
+				nextTime = time + rand.New(randSrc).Intn(8)
+			}
+
+			fmt.Println(rl.head.id+":", d, nextLoc, nextTime)
+			if rl.head.push(d, nextLoc, nextTime) {
+				modified = true
+			}
 		}
 
-		modified := join(rl, loc, time, nextLoc, nextTime)
 		if modified {
 			for _, bodyRule := range rl.head.bodyRules {
 				if _, ok := inQueue[bodyRule.id]; !ok {
