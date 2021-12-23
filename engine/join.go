@@ -108,7 +108,7 @@ func join(rl *rule, loc string, time int, nextLoc string, nextTime int) bool {
 		for i, v := range rl.headVarMapping {
 			d[i] = fn.lockedVars[v]
 		}
-		fmt.Println(d, nextLoc, nextTime)
+		fmt.Println(rl.head.id+":", d, nextLoc, nextTime)
 		if rl.head.push(d, nextLoc, nextTime) {
 			modified = true
 		}

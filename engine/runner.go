@@ -249,6 +249,20 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 
 			case chooseRelationName:
 				// TODO: Validate + switch to the correct syntax
+				if len(astAtom.Variables) != 2 {
+					return nil, newSemanticError("choose relations must have exactly two attributes", astAtom.Pos)
+				}
+
+				t := astAtom.Variables[0].NameTuple
+				if len(t) != len(r.headVarMapping) {
+					return nil, newSemanticError("the first element of a choose relation must be a tuple of all the corresponding head variables (in the same order as in the head)", astAtom.Pos)
+				}
+
+				for i, v := range r.headVarMapping {
+					if v.id != t[i].Name {
+						return nil, newSemanticError("the first element of a choose relation must be a tuple of all the corresponding head variables (in the same order as in the head)", t[i].Pos)
+					}
+				}
 				r.timeModel = timeModelAsync
 			}
 		}

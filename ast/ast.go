@@ -28,8 +28,10 @@ type Atom struct {
 }
 
 type Variable struct {
-	Pos  lexer.Position
-	Name string `parser:"@Ident"`
+	Pos lexer.Position
+
+	NameTuple []*Variable `parser:"('(' @@ (',' @@)* ')')|"`
+	Name      string      `parser:"@Ident"`
 }
 
 var (
