@@ -1,7 +1,7 @@
 package engine
 
 import (
-	"crypto/md5"
+	"crypto/sha1"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -272,10 +272,26 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 		}
 	}
 
-	runner.relations["in1"].push([]string{"a", "b"}, "L1", 0)
-	runner.relations["in1"].push([]string{"f", "b"}, "L1", 0)
-	runner.relations["in2"].push([]string{"b", "c"}, "L1", 0)
-	runner.relations["in2"].push([]string{"a", "b"}, "L1", 0)
+	// Preload specified data
+	for _, astPreload := range p.Preloads {
+		row := make([]string, len(astPreload.Fields))
+		for i, f := range astPreload.Fields {
+			// Per the lexer invariants, len(f.Data) >= 2.
+			row[i] = f.Data[1 : len(f.Data)-1]
+		}
+
+		if _, ok := runner.relations[astPreload.Name]; !ok {
+			return nil, newSemanticError("unreferenced relation found in a preload", astPreload.Pos)
+		} else if len(row) != len(runner.relations[astPreload.Name].indexes) {
+			return nil, newSemanticError("preload has a different number of attributes than the relation", astPreload.Pos)
+		}
+
+		runner.relations[astPreload.Name].push(row, astPreload.Loc, astPreload.Time)
+	}
+	//runner.relations["in1"].push([]string{"a", "b"}, "L1", 0)
+	//runner.relations["in1"].push([]string{"f", "b"}, "L1", 0)
+	//runner.relations["in2"].push([]string{"b", "c"}, "L1", 0)
+	//runner.relations["in2"].push([]string{"a", "b"}, "L1", 0)
 
 	//runner.relations["in1"].push([]string{"a", "a"}, "L1", 0)
 	//runner.relations["in1"].push([]string{"f", "b"}, "L1", 0)
@@ -304,6 +320,7 @@ func (r *Runner) Step() {
 		nextLoc := rl.headLoc
 
 		data := join(rl, loc, time)
+
 		modified := false
 		for _, d := range data {
 			var nextTime int
@@ -315,10 +332,10 @@ func (r *Runner) Step() {
 			case timeModelAsync:
 				combined := strings.Join(d, ";")
 				b := big.NewInt(0)
-				h := md5.New()
+				h := sha1.New()
 				h.Write([]byte(combined))
 
-				// h.Sum(nil) has a fixed size (md5.Size).
+				// h.Sum(nil) has a fixed size (sha1.Size).
 				b.SetBytes(h.Sum(nil)[:7])
 
 				randSrc := rand.NewSource(b.Int64())

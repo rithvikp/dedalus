@@ -10,7 +10,8 @@ import (
 type Program struct {
 	Pos lexer.Position
 
-	Rules []Rule `parser:"@@*"`
+	Rules    []Rule    `parser:"@@*"`
+	Preloads []Preload `parser:"'.' @@*"`
 }
 
 type Rule struct {
@@ -34,11 +35,28 @@ type Variable struct {
 	Name      string      `parser:"@Ident"`
 }
 
+type Preload struct {
+	Pos lexer.Position
+
+	Name   string         `parser:"@Ident"`
+	Fields []PreloadField `parser:"'(' (@@ ',')+"`
+	Loc    string         `parser:"@Ident ','"`
+	Time   int            `parser:"@Int')''.'"`
+}
+
+type PreloadField struct {
+	Pos lexer.Position
+
+	Data string `parser:"@String"`
+}
+
 var (
 	lex = lexer.MustSimple([]lexer.Rule{
 		{"Ident", `[a-zA-Z]([a-zA-Z0-9])*\b`, nil},
+		{"Int", `\d+`, nil},
+		{"String", `"(\\"|[^"])*"`, nil},
 		{"Oper", `[()]|:-`, nil},
-		{"Delim", `[,]`, nil},
+		{"Delim", `[,.]`, nil},
 		{"EOL", `\\n+`, nil},
 		{"whitespace", `\s+`, nil},
 	})
