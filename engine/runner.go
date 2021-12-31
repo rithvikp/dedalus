@@ -2,6 +2,7 @@ package engine
 
 import (
 	"crypto/sha1"
+	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -146,157 +147,151 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 		return r, nil
 	}
 
-	for i, astRule := range p.Rules {
-		r := &rule{
-			id:             strconv.Itoa(i),
-			headVarMapping: make([]*variable, len(astRule.Head.Variables)-2),
-		}
-
-		astHeadVars := astRule.Head.Variables
-		if len(astHeadVars) < 2 {
-			return nil, newSemanticError("all non-replicated read-only relations must have time and location attributes", astRule.Head.Pos)
-		}
-
-		var err error
-		r.head, err = addRel(&astRule.Head, true, r)
-		if err != nil {
-			return nil, err
-		}
-		r.headLoc = astHeadVars[len(astHeadVars)-2].Name
-		r.headTimeVar = astHeadVars[len(astHeadVars)-1].Name
-
-		runner.rules = append(runner.rules, r)
-
-		headVars := map[string][]int{}
-		for j, v := range astRule.Head.Variables {
-			headVars[v.Name] = append(headVars[v.Name], j)
-		}
-
-		vars := map[string]*variable{}
-		r.vars = map[string][]*variable{}
-
-		r.bodyLoc = ""
-		var lateAtoms []*ast.Atom
-		for _, astAtom := range astRule.Body {
-			if _, ok := lateHandleAtoms[astAtom.Name]; ok {
-				lateAtoms = append(lateAtoms, &astAtom)
-				continue
+	for i, astStatement := range p.Statements {
+		if astStatement.Rule != nil {
+			astRule := astStatement.Rule
+			r := &rule{
+				id:             strconv.Itoa(i),
+				headVarMapping: make([]*variable, len(astRule.Head.Variables)-2),
 			}
 
-			// TODO: Cleanup time/loc parsing (there are many -2's when looking at # of variables
-			// due to this issue).
-			if len(astAtom.Variables) < 2 {
+			astHeadVars := astRule.Head.Variables
+			if len(astHeadVars) < 2 {
 				return nil, newSemanticError("all non-replicated read-only relations must have time and location attributes", astRule.Head.Pos)
 			}
 
-			rel, err := addRel(&astAtom, false, r)
+			var err error
+			r.head, err = addRel(&astRule.Head, true, r)
 			if err != nil {
 				return nil, err
 			}
+			r.headLoc = astHeadVars[len(astHeadVars)-2].Name
+			r.headTimeVar = astHeadVars[len(astHeadVars)-1].Name
 
-			r.body = append(r.body, rel)
-			r.vars[astAtom.Name] = make([]*variable, len(astAtom.Variables)-2)
+			runner.rules = append(runner.rules, r)
 
-			atomLoc := astAtom.Variables[len(astAtom.Variables)-2].Name
-			if r.bodyLoc == "" {
-				r.bodyLoc = atomLoc
-			} else if atomLoc != r.bodyLoc {
-				return nil, newSemanticError("the location in all body atoms (where applicable) must be the same", astRule.Pos)
+			headVars := map[string][]int{}
+			for j, v := range astRule.Head.Variables {
+				headVars[v.Name] = append(headVars[v.Name], j)
 			}
 
-			atomTime := astAtom.Variables[len(astAtom.Variables)-1].Name
-			if r.bodyTimeVar == "" {
-				r.bodyTimeVar = atomTime
-			} else if atomTime != r.bodyTimeVar {
-				return nil, newSemanticError("the time in all body atoms (where applicable) must be the same", astRule.Pos)
-			}
+			vars := map[string]*variable{}
+			r.vars = map[string][]*variable{}
 
-			for j, astVar := range astAtom.Variables {
-				if j >= len(astAtom.Variables)-2 {
-					break
+			r.bodyLoc = ""
+			var lateAtoms []*ast.Atom
+			for _, astAtom := range astRule.Body {
+				if _, ok := lateHandleAtoms[astAtom.Name]; ok {
+					lateAtoms = append(lateAtoms, &astAtom)
+					continue
 				}
 
-				a := &attribute{
-					index:    j,
-					relation: rel,
+				// TODO: Cleanup time/loc parsing (there are many -2's when looking at # of variables
+				// due to this issue).
+				if len(astAtom.Variables) < 2 {
+					return nil, newSemanticError("all non-replicated read-only relations must have time and location attributes", astRule.Head.Pos)
 				}
 
-				var v *variable
-				var ok bool
-				if v, ok = vars[astVar.Name]; ok {
-					v.attrs[rel.id] = append(v.attrs[rel.id], a)
-				} else {
-					v = &variable{
-						id:    astVar.Name,
-						attrs: map[string][]*attribute{rel.id: {a}},
+				rel, err := addRel(&astAtom, false, r)
+				if err != nil {
+					return nil, err
+				}
+
+				r.body = append(r.body, rel)
+				r.vars[astAtom.Name] = make([]*variable, len(astAtom.Variables)-2)
+
+				atomLoc := astAtom.Variables[len(astAtom.Variables)-2].Name
+				if r.bodyLoc == "" {
+					r.bodyLoc = atomLoc
+				} else if atomLoc != r.bodyLoc {
+					return nil, newSemanticError("the location in all body atoms (where applicable) must be the same", astRule.Pos)
+				}
+
+				atomTime := astAtom.Variables[len(astAtom.Variables)-1].Name
+				if r.bodyTimeVar == "" {
+					r.bodyTimeVar = atomTime
+				} else if atomTime != r.bodyTimeVar {
+					return nil, newSemanticError("the time in all body atoms (where applicable) must be the same", astRule.Pos)
+				}
+
+				for j, astVar := range astAtom.Variables {
+					if j >= len(astAtom.Variables)-2 {
+						break
 					}
-					vars[v.id] = v
-				}
 
-				if indices, ok := headVars[v.id]; ok {
-					for _, k := range indices {
-						r.headVarMapping[k] = v
+					a := &attribute{
+						index:    j,
+						relation: rel,
 					}
-				}
-				r.vars[astAtom.Name][j] = v
-			}
-		}
 
-		for _, astAtom := range lateAtoms {
-			switch astAtom.Name {
-			case successorRelationName:
-				if len(astAtom.Variables) != 2 || astAtom.Variables[0].Name != r.bodyTimeVar || astAtom.Variables[1].Name != r.headTimeVar {
-					return nil, newSemanticError("incorrectly formatted successor relation", astAtom.Pos)
-				}
-				r.timeModel = timeModelSuccessor
-
-			case chooseRelationName:
-				if len(astAtom.Variables) != 2 {
-					return nil, newSemanticError("choose relations must have exactly two attributes", astAtom.Pos)
-				} else if astAtom.Variables[1].Name != r.headTimeVar {
-					return nil, newSemanticError("the second variable in choose relations must be the head relation's time variable", astAtom.Variables[1].Pos)
-				}
-
-				t := astAtom.Variables[0].NameTuple
-				if len(t) != len(r.headVarMapping) {
-					return nil, newSemanticError("the first element of a choose relation must be a tuple of all the corresponding head variables (in the same order as in the head)", astAtom.Pos)
-				}
-
-				for i, v := range r.headVarMapping {
-					if v.id != t[i].Name {
-						return nil, newSemanticError("the first element of a choose relation must be a tuple of all the corresponding head variables (in the same order as in the head)", t[i].Pos)
+					var v *variable
+					var ok bool
+					if v, ok = vars[astVar.Name]; ok {
+						v.attrs[rel.id] = append(v.attrs[rel.id], a)
+					} else {
+						v = &variable{
+							id:    astVar.Name,
+							attrs: map[string][]*attribute{rel.id: {a}},
+						}
+						vars[v.id] = v
 					}
+
+					if indices, ok := headVars[v.id]; ok {
+						for _, k := range indices {
+							r.headVarMapping[k] = v
+						}
+					}
+					r.vars[astAtom.Name][j] = v
 				}
-				r.timeModel = timeModelAsync
 			}
+
+			for _, astAtom := range lateAtoms {
+				switch astAtom.Name {
+				case successorRelationName:
+					if len(astAtom.Variables) != 2 || astAtom.Variables[0].Name != r.bodyTimeVar || astAtom.Variables[1].Name != r.headTimeVar {
+						return nil, newSemanticError("incorrectly formatted successor relation", astAtom.Pos)
+					}
+					r.timeModel = timeModelSuccessor
+
+				case chooseRelationName:
+					if len(astAtom.Variables) != 2 {
+						return nil, newSemanticError("choose relations must have exactly two attributes", astAtom.Pos)
+					} else if astAtom.Variables[1].Name != r.headTimeVar {
+						return nil, newSemanticError("the second variable in choose relations must be the head relation's time variable", astAtom.Variables[1].Pos)
+					}
+
+					t := astAtom.Variables[0].NameTuple
+					if len(t) != len(r.headVarMapping) {
+						return nil, newSemanticError("the first element of a choose relation must be a tuple of all the corresponding head variables (in the same order as in the head)", astAtom.Pos)
+					}
+
+					for i, v := range r.headVarMapping {
+						if v.id != t[i].Name {
+							return nil, newSemanticError("the first element of a choose relation must be a tuple of all the corresponding head variables (in the same order as in the head)", t[i].Pos)
+						}
+					}
+					r.timeModel = timeModelAsync
+				}
+			}
+		} else if astStatement.Preload != nil {
+			astPreload := astStatement.Preload
+			row := make([]string, len(astPreload.Fields))
+			for i, f := range astPreload.Fields {
+				// Per the lexer invariants, len(f.Data) >= 2.
+				row[i] = f.Data[1 : len(f.Data)-1]
+			}
+
+			if _, ok := runner.relations[astPreload.Name]; !ok {
+				return nil, newSemanticError("unreferenced relation found in a preload", astPreload.Pos)
+			} else if len(row) != len(runner.relations[astPreload.Name].indexes) {
+				return nil, newSemanticError("preload has a different number of attributes than the relation", astPreload.Pos)
+			}
+
+			runner.relations[astPreload.Name].push(row, astPreload.Loc, astPreload.Time)
+		} else {
+			return nil, errors.New("found a line that was neither a rule nor a preload")
 		}
 	}
-
-	// Preload specified data
-	for _, astPreload := range p.Preloads {
-		row := make([]string, len(astPreload.Fields))
-		for i, f := range astPreload.Fields {
-			// Per the lexer invariants, len(f.Data) >= 2.
-			row[i] = f.Data[1 : len(f.Data)-1]
-		}
-
-		if _, ok := runner.relations[astPreload.Name]; !ok {
-			return nil, newSemanticError("unreferenced relation found in a preload", astPreload.Pos)
-		} else if len(row) != len(runner.relations[astPreload.Name].indexes) {
-			return nil, newSemanticError("preload has a different number of attributes than the relation", astPreload.Pos)
-		}
-
-		runner.relations[astPreload.Name].push(row, astPreload.Loc, astPreload.Time)
-	}
-	//runner.relations["in1"].push([]string{"a", "b"}, "L1", 0)
-	//runner.relations["in1"].push([]string{"f", "b"}, "L1", 0)
-	//runner.relations["in2"].push([]string{"b", "c"}, "L1", 0)
-	//runner.relations["in2"].push([]string{"a", "b"}, "L1", 0)
-
-	//runner.relations["in1"].push([]string{"a", "a"}, "L1", 0)
-	//runner.relations["in1"].push([]string{"f", "b"}, "L1", 0)
-	//runner.relations["in2"].push([]string{"a", "a"}, "L1", 0)
-	//runner.relations["in2"].push([]string{"a", "b"}, "L1", 0)
 
 	return &runner, nil
 }

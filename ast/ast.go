@@ -10,8 +10,16 @@ import (
 type Program struct {
 	Pos lexer.Position
 
-	Rules    []Rule    `parser:"@@*"`
-	Preloads []Preload `parser:"'.' @@*"`
+	//Rules    []Rule    `parser:"@@*"`
+	//Preloads []Preload `parser:"'.' @@*"`
+	Statements []Statement `parser:"@@*"`
+}
+
+type Statement struct {
+	Pos lexer.Position
+
+	Rule    *Rule    `parser:"@@ |"`
+	Preload *Preload `parser:"(@@ '.')"`
 }
 
 type Rule struct {
@@ -31,7 +39,7 @@ type Atom struct {
 type Variable struct {
 	Pos lexer.Position
 
-	NameTuple []*Variable `parser:"('(' @@ (',' @@)* ')')|"`
+	NameTuple []*Variable `parser:"('(' @@ (',' @@)* ')') |"`
 	Name      string      `parser:"@Ident"`
 }
 
@@ -41,7 +49,7 @@ type Preload struct {
 	Name   string         `parser:"@Ident"`
 	Fields []PreloadField `parser:"'(' (@@ ',')+"`
 	Loc    string         `parser:"@Ident ','"`
-	Time   int            `parser:"@Int')''.'"`
+	Time   int            `parser:"@Int')'"`
 }
 
 type PreloadField struct {
@@ -61,7 +69,7 @@ var (
 		{"whitespace", `\s+`, nil},
 	})
 
-	parser = participle.MustBuild(&Program{}, participle.Lexer(lex))
+	parser = participle.MustBuild(&Program{}, participle.Lexer(lex), participle.UseLookahead(2))
 )
 
 func Parse(r io.Reader) (*Program, error) {
