@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/rithvikp/dedalus/ast"
 	"github.com/rithvikp/dedalus/engine"
@@ -23,24 +25,6 @@ func Execute() error {
 }
 
 func run(cmd *cobra.Command, args []string) {
-	//program := `out(a,b,c,L1,T) :- in1(a,b,L1,T), in2(b,c,L1,T)
-	//out(a,b,c,L1,S) :- out(a,b,c,L1,T), choose((a,b,c),S)
-
-	//.
-	//in1("a","b",L1,0).
-	//in1("f","b",L1,0).
-	//in2("b","c",L1,0).
-	//in2("a","b",L1,0).
-	//`
-	//program := `out(a,a,L1,T) :- in1(a,a,L1,T), in2(a,a,L1,T)
-
-	//.
-	//in1("a","a",L1,0).
-	//in1("f","b",L1,0).
-	//in2("a","a",L1,0).
-	//in2("a","b",L1,0).
-	//`
-
 	f, err := os.Open(args[0])
 	if err != nil {
 		fmt.Printf("Unable to read the source file: %v\n", err)
@@ -58,5 +42,30 @@ func run(cmd *cobra.Command, args []string) {
 		fmt.Printf("Unable to run your program: %v\n", err)
 		os.Exit(1)
 	}
-	r.Step()
+
+	fmt.Println("<=== Ready to begin execution ===>")
+
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		in := scanner.Text()
+
+		tokens := strings.Split(in, " ")
+		if len(tokens) == 0 {
+			continue
+		}
+
+		switch tokens[0] {
+		case "s", "step":
+			r.Step()
+		case "p", "print":
+			fmt.Println("TODO: print out a table")
+		case "h", "help":
+			fmt.Println("TODO: help page")
+		}
+
+	}
+
+	if err := scanner.Err(); err != nil {
+		fmt.Printf("Unable to read input: %v\n", err)
+	}
 }
