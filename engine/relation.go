@@ -51,13 +51,25 @@ func (r *relation) contains(d []string, loc string, time int) bool {
 	return false
 }
 
-// TODO: Replace this with an iterator for efficiency
+// TODO: Replace this with an iterator-like variant for efficiency
 func (r *relation) all(loc string, time int) []*fact {
 	var facts []*fact
 	lt := locTime{loc, time}
 	for _, factSuperSet := range r.indexes[0] {
 		for _, f := range factSuperSet[lt] {
 			facts = append(facts, f)
+		}
+	}
+
+	return facts
+}
+
+// TODO: Replace this with an iterator-like variant for efficiency
+func (r *relation) allAcrossSpaceTime() []*fact {
+	var facts []*fact
+	for _, factSuperSet := range r.indexes[0] {
+		for _, factSet := range factSuperSet {
+			facts = append(facts, factSet...)
 		}
 	}
 

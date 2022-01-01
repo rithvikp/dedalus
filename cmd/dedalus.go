@@ -57,10 +57,23 @@ func run(cmd *cobra.Command, args []string) {
 		switch tokens[0] {
 		case "s", "step":
 			r.Step()
+
 		case "p", "print":
-			fmt.Println("TODO: print out a table")
+			if len(tokens) != 2 {
+				fmt.Println("The print command requires on additional argument: the name of the relation to be printed")
+				continue
+			}
+			fmt.Println()
+			err := r.PrintRelation(tokens[1])
+			if err != nil {
+				fmt.Printf("Unable to print relation %s: %v\n", tokens[1], err)
+				continue
+			}
+			fmt.Println()
+
 		case "h", "help":
 			fmt.Println("TODO: help page")
+
 		}
 
 	}

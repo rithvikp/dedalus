@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"os"
+	"sort"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/alecthomas/participle/v2/lexer"
 	"github.com/rithvikp/dedalus/ast"
@@ -353,4 +356,42 @@ func (r *Runner) Step() {
 	}
 
 	r.currentTimestamp++
+}
+
+func (r *Runner) PrintRelation(name string) error {
+	rel, ok := r.relations[name]
+	if !ok {
+		return nil
+	}
+
+	tabw := new(tabwriter.Writer)
+	tabw.Init(os.Stdout, 4, 8, 1, ' ', 0)
+
+	fmt.Fprint(tabw, "Idx\t")
+	for i := range rel.indexes {
+		fmt.Fprintf(tabw, "A%d\t", i)
+	}
+	fmt.Fprintln(tabw, "Loc\tTime")
+
+	facts := rel.allAcrossSpaceTime()
+	sort.SliceStable(facts, func(i, j int) bool {
+		if facts[i].timestamp == facts[j].timestamp {
+			if facts[i].location <= facts[j].location {
+				return true
+			}
+			return false
+		} else if facts[i].timestamp < facts[j].timestamp {
+			return true
+		}
+		return false
+	})
+
+	for i, f := range facts {
+		fmt.Fprintf(tabw, "%d.\t", i+1)
+		for _, val := range f.data {
+			fmt.Fprintf(tabw, "%s\t", val)
+		}
+		fmt.Fprintf(tabw, "%s\t%d\n", f.location, f.timestamp)
+	}
+	return tabw.Flush()
 }
