@@ -10,8 +10,6 @@ import (
 type Program struct {
 	Pos lexer.Position
 
-	//Rules    []Rule    `parser:"@@*"`
-	//Preloads []Preload `parser:"'.' @@*"`
 	Statements []Statement `parser:"@@*"`
 }
 
@@ -25,8 +23,22 @@ type Statement struct {
 type Rule struct {
 	Pos lexer.Position
 
-	Head Atom   `parser:"@@ ':-'"`
-	Body []Atom `parser:"@@ (',' @@)*"`
+	Head HeadAtom `parser:"@@ ':-'"`
+	Body []Atom   `parser:"@@ (',' @@)*"`
+}
+
+type HeadAtom struct {
+	Pos lexer.Position
+
+	Name  string     `parser:"@Ident"`
+	Terms []HeadTerm `parser:"'(' @@ (',' @@)* ')'"`
+}
+
+type HeadTerm struct {
+	Pos lexer.Position
+
+	Aggregator *string  `parser:"@Ident?"`
+	Variable   Variable `parser:"('<' @@ '>')|@@"` // This is a temporary workaround
 }
 
 type Atom struct {
@@ -63,7 +75,7 @@ var (
 		{"Ident", `[a-zA-Z]([a-zA-Z0-9])*\b`, nil},
 		{"Int", `\d+`, nil},
 		{"String", `"(\\"|[^"])*"`, nil},
-		{"Oper", `[()]|:-`, nil},
+		{"Oper", `[()<>]|:-`, nil},
 		{"Delim", `[,.]`, nil},
 		{"EOL", `\\n+`, nil},
 		{"whitespace", `\s+`, nil},

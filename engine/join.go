@@ -4,7 +4,6 @@ type factNode struct {
 	lockedVars map[*variable]string
 }
 
-// This is EXTREMELY hacky/non-clean code, but it works as a proof of concept.
 func join(rl *rule, loc string, time int) [][]string {
 	lt := locTime{loc, time}
 
@@ -104,7 +103,7 @@ func join(rl *rule, loc string, time int) [][]string {
 	for i, fn := range fringe {
 		d := make([]string, len(rl.head.indexes))
 		for j, v := range rl.headVarMapping {
-			d[j] = fn.lockedVars[v]
+			d[j] = fn.lockedVars[v.v]
 		}
 		data[i] = d
 	}
