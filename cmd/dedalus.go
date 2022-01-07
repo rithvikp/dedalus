@@ -14,10 +14,19 @@ import (
 var (
 	rootCmd = &cobra.Command{
 		Use:  "dedalus",
+		Args: cobra.ExactArgs(1),
+	}
+
+	runCmd = &cobra.Command{
+		Use:  "run",
 		Run:  run,
 		Args: cobra.ExactArgs(1),
 	}
 )
+
+func init() {
+	rootCmd.AddCommand(runCmd)
+}
 
 // Execute starts the program.
 func Execute() error {

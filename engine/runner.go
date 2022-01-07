@@ -91,9 +91,9 @@ type rule struct {
 	// The keys are relations and the list of variables corresponds to the variables in the atom.
 	vars map[string][]*variable
 
-	timeModel timeModel
-	bodyLoc   string
-	headLoc   string
+	timeModel  timeModel
+	bodyLocVar string
+	headLocVar string
 
 	bodyTimeVar string
 	headTimeVar string
@@ -176,7 +176,7 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 			if err != nil {
 				return nil, err
 			}
-			r.headLoc = astHeadVars[len(astHeadVars)-2].Variable.Name
+			r.headLocVar = astHeadVars[len(astHeadVars)-2].Variable.Name
 			r.headTimeVar = astHeadVars[len(astHeadVars)-1].Variable.Name
 
 			runner.rules = append(runner.rules, r)
@@ -200,7 +200,7 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 			vars := map[string]*variable{}
 			r.vars = map[string][]*variable{}
 
-			r.bodyLoc = ""
+			r.bodyLocVar = ""
 			var lateAtoms []*ast.Atom
 			for _, astAtom := range astRule.Body {
 				if _, ok := lateHandleAtoms[astAtom.Name]; ok {
@@ -222,10 +222,10 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 				r.body = append(r.body, rel)
 				r.vars[astAtom.Name] = make([]*variable, len(astAtom.Variables)-2)
 
-				atomLoc := astAtom.Variables[len(astAtom.Variables)-2].Name
-				if r.bodyLoc == "" {
-					r.bodyLoc = atomLoc
-				} else if atomLoc != r.bodyLoc {
+				atomLocVar := astAtom.Variables[len(astAtom.Variables)-2].Name
+				if r.bodyLocVar == "" {
+					r.bodyLocVar = atomLocVar
+				} else if atomLocVar != r.bodyLocVar {
 					return nil, newSemanticError("the location in all body atoms (where applicable) must be the same", astRule.Pos)
 				}
 
@@ -337,8 +337,8 @@ func (r *Runner) Step() {
 		queue = queue[1:]
 
 		time := r.currentTimestamp
-		loc := rl.bodyLoc
-		nextLoc := rl.headLoc
+		loc := rl.bodyLocVar
+		nextLoc := rl.headLocVar
 
 		data := join(rl, loc, time)
 
