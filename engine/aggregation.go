@@ -116,6 +116,7 @@ func aggregate(rl *rule, data [][]string) [][]string {
 			aggIndices = append(aggIndices, ai)
 		}
 	}
+	nonAggIndices = append(nonAggIndices, len(rl.headVarMapping))
 
 	type aggVar struct {
 		i   int
@@ -151,7 +152,7 @@ func aggregate(rl *rule, data [][]string) [][]string {
 
 	var aggData [][]string
 	for _, pa := range pendingAggData {
-		d := make([]string, len(rl.headVarMapping))
+		d := make([]string, len(rl.headVarMapping)+1)
 		for i, di := range nonAggIndices {
 			d[di] = pa.nonAgg[i]
 		}

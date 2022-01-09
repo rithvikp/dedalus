@@ -396,6 +396,9 @@ func (r *Runner) Step() {
 
 			tuple := d[:len(d)-1]
 			nextLoc := d[len(d)-1]
+			// Keep track of new locations
+			r.locations[nextLoc] = struct{}{}
+
 			fmt.Println(rl.head.id+":", tuple, nextLoc, nextTime)
 			if rl.head.push(tuple, nextLoc, nextTime) {
 				modified = true
