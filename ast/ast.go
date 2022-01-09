@@ -17,7 +17,8 @@ type Statement struct {
 	Pos lexer.Position
 
 	Rule    *Rule    `parser:"@@ |"`
-	Preload *Preload `parser:"(@@ '.')"`
+	Preload *Preload `parser:"(@@ '.') |"`
+	Comment *string  `parser:"@Comment"`
 }
 
 type Rule struct {
@@ -72,9 +73,10 @@ type PreloadField struct {
 
 var (
 	lex = lexer.MustSimple([]lexer.Rule{
-		{"Ident", `[a-zA-Z]([a-zA-Z0-9])*\b`, nil},
+		{"Ident", `[a-zA-Z]([a-zA-Z0-9_'])*`, nil},
 		{"Int", `\d+`, nil},
 		{"String", `"(\\"|[^"])*"`, nil},
+		{"Comment", `#[^\n]*`, nil},
 		{"Oper", `[()<>]|:-`, nil},
 		{"Delim", `[,.]`, nil},
 		{"EOL", `\\n+`, nil},

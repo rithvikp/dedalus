@@ -2,7 +2,6 @@ package engine
 
 import (
 	"crypto/sha1"
-	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -91,12 +90,11 @@ type rule struct {
 	// The keys are relations and the list of variables corresponds to the variables in the atom.
 	vars map[string][]*variable
 
-	timeModel  timeModel
-	bodyLocVar string
-	headLocVar string
-
-	bodyTimeVar string
-	headTimeVar string
+	timeModel   timeModel
+	bodyLocVar  *variable
+	headLocVar  *variable
+	bodyTimeVar *variable
+	headTimeVar *variable
 
 	hasAggregation bool
 }
@@ -107,6 +105,7 @@ type Runner struct {
 	rules []*rule
 
 	currentTimestamp int
+	locations        map[string]struct{}
 }
 
 func (f *fact) equals(other *fact) bool {
@@ -129,6 +128,7 @@ func (f *fact) equals(other *fact) bool {
 func NewRunner(p *ast.Program) (*Runner, error) {
 	runner := Runner{
 		relations: map[string]*relation{},
+		locations: map[string]struct{}{},
 	}
 
 	addRel := func(id string, vars int, pos lexer.Position, head bool, rl *rule) (*relation, error) {
@@ -165,6 +165,8 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 				id:             strconv.Itoa(i),
 				headVarMapping: make([]headTerm, len(astRule.Head.Terms)-2),
 			}
+			vars := map[string]*variable{}
+			r.vars = map[string][]*variable{}
 
 			astHeadVars := astRule.Head.Terms
 			if len(astHeadVars) < 2 {
@@ -176,14 +178,26 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 			if err != nil {
 				return nil, err
 			}
-			r.headLocVar = astHeadVars[len(astHeadVars)-2].Variable.Name
-			r.headTimeVar = astHeadVars[len(astHeadVars)-1].Variable.Name
+			r.headLocVar = &variable{
+				id:    astHeadVars[len(astHeadVars)-2].Variable.Name,
+				attrs: map[string][]*attribute{},
+			}
+			vars[r.headLocVar.id] = r.headLocVar
+			r.headTimeVar = &variable{
+				id:    astHeadVars[len(astHeadVars)-1].Variable.Name,
+				attrs: map[string][]*attribute{},
+			}
+			vars[r.headTimeVar.id] = r.headTimeVar
 
 			runner.rules = append(runner.rules, r)
 
 			headVars := map[string][]int{}
 			aggregatedIndices := map[int]aggregator{}
-			for j, v := range astRule.Head.Terms {
+			for j, v := range astHeadVars {
+				if j >= len(astHeadVars)-2 {
+					break
+				}
+
 				headVars[v.Variable.Name] = append(headVars[v.Variable.Name], j)
 				if v.Aggregator == nil {
 					continue
@@ -197,10 +211,6 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 				aggregatedIndices[j] = agg
 			}
 
-			vars := map[string]*variable{}
-			r.vars = map[string][]*variable{}
-
-			r.bodyLocVar = ""
 			var lateAtoms []*ast.Atom
 			for _, astAtom := range astRule.Body {
 				if _, ok := lateHandleAtoms[astAtom.Name]; ok {
@@ -222,17 +232,41 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 				r.body = append(r.body, rel)
 				r.vars[astAtom.Name] = make([]*variable, len(astAtom.Variables)-2)
 
-				atomLocVar := astAtom.Variables[len(astAtom.Variables)-2].Name
-				if r.bodyLocVar == "" {
-					r.bodyLocVar = atomLocVar
-				} else if atomLocVar != r.bodyLocVar {
+				addToHeadVarMapping := func(v *variable) {
+					if indices, ok := headVars[v.id]; ok {
+						for _, k := range indices {
+							hv := headTerm{v: v}
+							if agg, ok := aggregatedIndices[k]; ok {
+								hv.agg = &agg
+							}
+							r.headVarMapping[k] = hv
+						}
+					}
+				}
+
+				atomLoc := astAtom.Variables[len(astAtom.Variables)-2].Name
+				if r.bodyLocVar == nil {
+					if atomLoc != r.headLocVar.id {
+						r.bodyLocVar = &variable{id: atomLoc, attrs: map[string][]*attribute{}}
+						vars[atomLoc] = r.bodyLocVar
+					} else {
+						r.bodyLocVar = r.headLocVar
+					}
+					addToHeadVarMapping(r.bodyLocVar)
+				} else if r.bodyLocVar.id != atomLoc {
 					return nil, newSemanticError("the location in all body atoms (where applicable) must be the same", astRule.Pos)
 				}
 
 				atomTime := astAtom.Variables[len(astAtom.Variables)-1].Name
-				if r.bodyTimeVar == "" {
-					r.bodyTimeVar = atomTime
-				} else if atomTime != r.bodyTimeVar {
+				if r.bodyTimeVar == nil {
+					if atomTime != r.headTimeVar.id {
+						r.bodyTimeVar = &variable{id: atomTime, attrs: map[string][]*attribute{}}
+						vars[atomTime] = r.bodyTimeVar
+					} else {
+						r.bodyTimeVar = r.headTimeVar
+					}
+					addToHeadVarMapping(r.bodyTimeVar)
+				} else if r.bodyTimeVar.id != atomTime {
 					return nil, newSemanticError("the time in all body atoms (where applicable) must be the same", astRule.Pos)
 				}
 
@@ -257,16 +291,8 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 						}
 						vars[v.id] = v
 					}
+					addToHeadVarMapping(v)
 
-					if indices, ok := headVars[v.id]; ok {
-						for _, k := range indices {
-							hv := headTerm{v: v}
-							if agg, ok := aggregatedIndices[k]; ok {
-								hv.agg = &agg
-							}
-							r.headVarMapping[k] = hv
-						}
-					}
 					r.vars[astAtom.Name][j] = v
 				}
 			}
@@ -274,7 +300,7 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 			for _, astAtom := range lateAtoms {
 				switch astAtom.Name {
 				case successorRelationName:
-					if len(astAtom.Variables) != 2 || astAtom.Variables[0].Name != r.bodyTimeVar || astAtom.Variables[1].Name != r.headTimeVar {
+					if len(astAtom.Variables) != 2 || astAtom.Variables[0].Name != r.bodyTimeVar.id || astAtom.Variables[1].Name != r.headTimeVar.id {
 						return nil, newSemanticError("incorrectly formatted successor relation", astAtom.Pos)
 					}
 					r.timeModel = timeModelSuccessor
@@ -282,11 +308,12 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 				case chooseRelationName:
 					if len(astAtom.Variables) != 2 {
 						return nil, newSemanticError("choose relations must have exactly two attributes", astAtom.Pos)
-					} else if astAtom.Variables[1].Name != r.headTimeVar {
+					} else if astAtom.Variables[1].Name != r.headTimeVar.id {
 						return nil, newSemanticError("the second variable in choose relations must be the head relation's time variable", astAtom.Variables[1].Pos)
 					}
 
 					t := astAtom.Variables[0].NameTuple
+					fmt.Println(len(r.headVarMapping))
 					if len(t) != len(r.headVarMapping) {
 						return nil, newSemanticError("the first element of a choose relation must be a tuple of all the corresponding head variables (in the same order as in the head)", astAtom.Pos)
 					}
@@ -314,8 +341,7 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 			}
 
 			runner.relations[astPreload.Name].push(row, astPreload.Loc, astPreload.Time)
-		} else {
-			return nil, errors.New("found a line that was neither a rule nor a preload")
+			runner.locations[astPreload.Loc] = struct{}{}
 		}
 	}
 
@@ -337,13 +363,15 @@ func (r *Runner) Step() {
 		queue = queue[1:]
 
 		time := r.currentTimestamp
-		loc := rl.bodyLocVar
-		nextLoc := rl.headLocVar
 
-		data := join(rl, loc, time)
+		var data [][]string
+		for loc := range r.locations {
+			ldata := join(rl, loc, time)
+			if rl.hasAggregation {
+				ldata = aggregate(rl, ldata)
+			}
 
-		if rl.hasAggregation {
-			data = aggregate(rl, data)
+			data = append(data, ldata...)
 		}
 
 		modified := false
@@ -360,15 +388,16 @@ func (r *Runner) Step() {
 				h := sha1.New()
 				h.Write([]byte(combined))
 
-				// h.Sum(nil) has a fixed size (sha1.Size).
-				b.SetBytes(h.Sum(nil)[:7])
+				b.SetBytes(h.Sum(nil)[:7]) // h.Sum(nil) has a fixed size (sha1.Size).
 
 				randSrc := rand.NewSource(b.Int64())
 				nextTime = time + rand.New(randSrc).Intn(8)
 			}
 
-			fmt.Println(rl.head.id+":", d, nextLoc, nextTime)
-			if rl.head.push(d, nextLoc, nextTime) {
+			tuple := d[:len(d)-1]
+			nextLoc := d[len(d)-1]
+			fmt.Println(rl.head.id+":", tuple, nextLoc, nextTime)
+			if rl.head.push(tuple, nextLoc, nextTime) {
 				modified = true
 			}
 		}

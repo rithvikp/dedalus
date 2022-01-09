@@ -1,5 +1,5 @@
-out(a,b,c,L1,T) :- in1(a,b,L1,T), in2(b,c,L1,T)
-out2(a,b,c,L1,S) :- out(a,b,c,L1,T), choose((a,b,c),S)
+out(a,b,c,l,t) :- in1(a,b,l,t), in2(b,c,l,t)
+out2(max<a>,b,c,l,t') :- out(a,b,c,l,t), choose((a,b,c),t')
 
 in1("1","2",L1,0).
 in1("5","2",L1,0).
