@@ -15,12 +15,13 @@ type aggregator string
 const (
 	aggregatorCount aggregator = "count"
 	aggregatorMax   aggregator = "max"
+	aggregatorMin   aggregator = "min"
 	aggregatorSum   aggregator = "sum"
 )
 
 func (a aggregator) Valid() bool {
 	switch a {
-	case aggregatorCount, aggregatorMax, aggregatorSum:
+	case aggregatorCount, aggregatorMax, aggregatorMin, aggregatorSum:
 		return true
 	default:
 		return false
@@ -31,7 +32,9 @@ func (a aggregator) Valid() bool {
 // operation (only numbers for now). While this is not great, until a better type system is implemented,
 // it will suffice.
 func (a aggregator) Do(prev string, val string) string {
+	noPrev := false
 	if prev == "" {
+		noPrev = true
 		prev = "0"
 	}
 
@@ -68,17 +71,17 @@ func (a aggregator) Do(prev string, val string) string {
 
 		return strconv.Itoa(pi + 1)
 
-	case aggregatorMax:
+	case aggregatorMax, aggregatorMin:
 		var next string
 		if !float {
 			nextI := pi
-			if vi > pi {
+			if noPrev || a == aggregatorMax && vi > pi || a == aggregatorMin && vi < pi {
 				nextI = vi
 			}
 			next = strconv.Itoa(nextI)
 		} else {
 			nextF := pf
-			if vf > pf {
+			if noPrev || a == aggregatorMax && vf > pf || a == aggregatorMin && vf < pf {
 				nextF = vf
 			}
 			next = fmt.Sprintf("%f", nextF)

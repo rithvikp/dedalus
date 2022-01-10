@@ -41,18 +41,142 @@ func TestExecution(t *testing.T) {
 		facts  map[string][]*fact
 	}{
 		{
-			msg: "basic join, same time",
+			msg: "join, same time",
 			source: `
-out(a,b,c,l,t) :- in1(a,b,l,t), in2(b,c,l,t)
+out1(a,b,c,l,t) :- in1(a,b,l,t), in2(b,c,l,t)
+out2(a,b,c,l,t) :- in2(b,c,l,t), in1(a,b,l,t)
 in1("1","2",L1,0).
 in1("3","2",L1,0).
 in2("2","3",L1,0).
 in2("1","2",L1,0).`,
 			facts: map[string][]*fact{
-				"out": {
+				"out1": {
 					{[]string{"1", "2", "3"}, "L1", 0},
 					{[]string{"3", "2", "3"}, "L1", 0},
 				},
+				"out2": {
+					{[]string{"1", "2", "3"}, "L1", 0},
+					{[]string{"3", "2", "3"}, "L1", 0},
+				},
+			},
+		},
+		{
+			msg: "self-join, same time",
+			source: `
+out(a,l,t) :- in1(a,a,l,t)
+in1("a","a",L1,0).
+in1("a","b",L1,0).`,
+			facts: map[string][]*fact{
+				"out": {
+					{[]string{"a"}, "L1", 0},
+				},
+			},
+		},
+		{
+			msg: "self-join with multiple relations, same time",
+			source: `
+out1(a,b,l,t) :- in1(a,a,l,t), in2(a,b,l,t)
+out2(a,b,l,t) :- in2(a,b,l,t), in1(a,a,l,t)
+in1("a","a",L1,0).
+in1("a","b",L1,0).
+in1("b","c",L1,0).
+in2("a","b",L1,0).
+in2("a","c",L1,0).
+in2("b","c",L1,0).`,
+			facts: map[string][]*fact{
+				"out1": {
+					{[]string{"a", "b"}, "L1", 0},
+					{[]string{"a", "c"}, "L1", 0},
+				},
+				"out2": {
+					{[]string{"a", "b"}, "L1", 0},
+					{[]string{"a", "c"}, "L1", 0},
+				},
+			},
+		},
+		{
+			msg: "self-join with multiple relations but no other joins, same time",
+			source: `
+out1(a,b,l,t) :- in1(a,a,l,t), in2(b,c,l,t)
+out2(a,b,l,t) :- in2(b,c,l,t), in1(a,a,l,t)
+in1("a","a",L1,0).
+in1("a","b",L1,0).
+in1("b","c",L1,0).
+in2("a","b",L1,0).
+in2("b","c",L1,0).`,
+			facts: map[string][]*fact{
+				"out1": {
+					{[]string{"a", "a"}, "L1", 0},
+					{[]string{"a", "b"}, "L1", 0},
+				},
+				"out2": {
+					{[]string{"a", "a"}, "L1", 0},
+					{[]string{"a", "b"}, "L1", 0},
+				},
+			},
+		},
+		{
+			msg: "join on loc and time, same time",
+			source: `
+out1(a,b,l,t) :- in1(a,t,l,t), in2(b,l,l,t)
+out2(a,b,l,t) :- in2(b,l,l,t), in1(a,t,l,t)
+in1("1","0",L1,0).
+in1("2","1",L1,0).
+in2("3","L1",L1,0).
+in2("4","L2",L1,0).`,
+			facts: map[string][]*fact{
+				"out1": {{[]string{"1", "3"}, "L1", 0}},
+				"out2": {{[]string{"1", "3"}, "L1", 0}},
+			},
+		},
+		{
+			msg: "max aggregation, same time",
+			source: `
+out1(max<a>,b,c,l,t) :- in1(a,b,l,t), in2(b,c,l,t)
+out2(max<a>,b,c,l,t) :- in2(b,c,l,t), in1(a,b,l,t)
+in1("1","2",L1,0).
+in1("3","2",L1,0).
+in2("2","3",L1,0).
+in2("1","2",L1,0).`,
+			facts: map[string][]*fact{
+				"out1": {{[]string{"3", "2", "3"}, "L1", 0}},
+				"out2": {{[]string{"3", "2", "3"}, "L1", 0}},
+			},
+		},
+		{
+			msg: "min aggregation, same time",
+			source: `
+out(min<a>,b,c,l,t) :- in1(a,b,l,t), in2(b,c,l,t)
+in1("1","2",L1,0).
+in1("3","2",L1,0).
+in2("2","3",L1,0).
+in2("1","2",L1,0).`,
+			facts: map[string][]*fact{
+				"out": {{[]string{"1", "2", "3"}, "L1", 0}},
+			},
+		},
+		{
+			msg: "sum aggregation, same time",
+			source: `
+out(b,sum<a>,c,l,t) :- in1(a,b,l,t), in2(b,c,l,t)
+in1("1","2",L1,0).
+in1("3","2",L1,0).
+in2("2","3",L1,0).
+in2("1","2",L1,0).`,
+			facts: map[string][]*fact{
+				"out": {{[]string{"2", "4", "3"}, "L1", 0}},
+			},
+		},
+		{
+			msg: "count aggregation, same time",
+			source: `
+out(b,count<a>,c,l,t) :- in1(a,b,l,t), in2(b,c,l,t)
+in1("1","2",L1,0).
+in1("3","2",L1,0).
+in2("2","3",L1,0).
+in2("1","2",L1,0).`,
+			facts: map[string][]*fact{
+				"out": {{[]string{"2", "2", "3"}, "L1", 0}},
 			},
 		},
 	}
@@ -62,13 +186,13 @@ in2("1","2",L1,0).`,
 		t.Run(tt.msg, func(t *testing.T) {
 			p, err := ast.Parse(strings.NewReader(tt.source))
 			if err != nil {
-				t.Errorf("Unable to parse the program: %v\n", err)
+				t.Errorf("unable to parse the program: %v", err)
 				return
 			}
 
 			r, err := NewRunner(p)
 			if err != nil {
-				t.Errorf("Unable to initialize the runner: %v\n", err)
+				t.Errorf("unable to initialize the runner: %v", err)
 				return
 			}
 

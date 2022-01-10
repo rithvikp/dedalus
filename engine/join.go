@@ -14,21 +14,27 @@ func join(rl *rule, loc string, time int) [][]string {
 	var fringe []*factNode
 	rel := rl.body[0]
 	for _, f := range rel.all(loc, time) {
-		fn := &factNode{lockedVars: map[*variable]string{}}
+		fn := &factNode{lockedVars: map[*variable]string{
+			rl.bodyLocVar:  loc,
+			rl.bodyTimeVar: strconv.Itoa(time),
+		}}
 
 		consistent := true
 		for _, v := range rl.vars[rel.id] {
 			attrs := v.attrs[rel.id]
 			val := f.data[attrs[0].index]
+			if v == rl.bodyLocVar && val != loc || v == rl.bodyTimeVar && val != strconv.Itoa(time) {
+				consistent = false
+				break
+			}
+
 			for _, a := range attrs {
 				if f.data[a.index] != val {
 					consistent = false
+					break
 				}
 			}
 			fn.lockedVars[v] = val
-			if !consistent {
-				break
-			}
 		}
 
 		if consistent {
@@ -40,28 +46,43 @@ func join(rl *rule, loc string, time int) [][]string {
 		var workingSet []*fact
 		first := true
 		for _, v := range rl.vars[rel.id] {
+			var matched []*fact
+			attrs := v.attrs[rel.id]
+			if val, ok := node.lockedVars[v]; ok {
+				matched, ok = rel.indexes[attrs[0].index][val][lt]
+				if !ok {
+					return nil
+				}
+			} else {
+				matched = rel.all(loc, time)
+			}
+
 			var newWorkingSet []*fact
-			for _, a := range v.attrs[rel.id] {
-				var matched []*fact
-				if val, ok := node.lockedVars[v]; ok {
-					matched, ok = rel.indexes[a.index][val][lt]
-					if !ok {
-						return nil
+			if first {
+				newWorkingSet = make([]*fact, 0, len(matched))
+			}
+			for _, f1 := range matched {
+				val := f1.data[attrs[0].index]
+				consistent := true
+				for _, a := range attrs {
+					if f1.data[a.index] != val {
+						consistent = false
+						break
 					}
-				} else {
-					matched = rel.all(loc, time)
+				}
+				if !consistent {
+					continue
 				}
 
 				if first {
-					newWorkingSet = matched
-				} else {
-					// TODO: Switched to a hashed setup
-					for _, f1 := range workingSet {
-						for _, f2 := range matched {
-							if f1.equals(f2) {
-								newWorkingSet = append(newWorkingSet, f1)
-							}
-						}
+					newWorkingSet = append(newWorkingSet, f1)
+					continue
+				}
+
+				// TODO: Switch to a hashed setup
+				for _, f2 := range workingSet {
+					if f1.equals(f2) {
+						newWorkingSet = append(newWorkingSet, f1)
 					}
 				}
 			}
@@ -83,14 +104,14 @@ func join(rl *rule, loc string, time int) [][]string {
 
 				fn.lockedVars[v] = val
 				// Ensure time and location constraints are maintained
-				if v == rl.bodyLocVar && val != loc {
-					consistent = false
-				} else if v == rl.bodyTimeVar && val != strconv.Itoa(time) {
-					consistent = false
-				}
-				if !consistent {
-					break
-				}
+				//if v == rl.bodyLocVar && val != loc {
+				//consistent = false
+				//} else if v == rl.bodyTimeVar && val != strconv.Itoa(time) {
+				//consistent = false
+				//}
+				//if !consistent {
+				//break
+				//}
 			}
 			if consistent {
 				children = append(children, fn)
