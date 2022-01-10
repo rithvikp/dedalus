@@ -41,7 +41,7 @@ func TestExecution(t *testing.T) {
 		facts  map[string][]*fact
 	}{
 		{
-			msg: "join, same time",
+			msg: "join",
 			source: `
 out1(a,b,c,l,t) :- in1(a,b,l,t), in2(b,c,l,t)
 out2(a,b,c,l,t) :- in2(b,c,l,t), in1(a,b,l,t)
@@ -55,7 +55,7 @@ in2("1","2",L1,0).`,
 			},
 		},
 		{
-			msg: "large join, same time",
+			msg: "large join",
 			source: `
 out(a,b,c,d,f,l,t) :- in1(a,b,l,t), in2(b,c,l,t), in3(c,d,l,t), in4(e,f,l,t)
 in1("1","2",L1,0).
@@ -90,7 +90,7 @@ in2("1","2",L1,0).`,
 			},
 		},
 		{
-			msg: "self-join, same time",
+			msg: "self-join",
 			source: `
 out(a,l,t) :- in1(a,a,l,t)
 in1("a","a",L1,0).
@@ -102,7 +102,7 @@ in1("a","b",L1,0).`,
 			},
 		},
 		{
-			msg: "self-join with multiple relations, same time",
+			msg: "self-join with multiple relations",
 			source: `
 out1(a,b,l,t) :- in1(a,a,l,t), in2(a,b,l,t)
 out2(a,b,l,t) :- in2(a,b,l,t), in1(a,a,l,t)
@@ -118,7 +118,7 @@ in2("b","c",L1,0).`,
 			},
 		},
 		{
-			msg: "self-join with multiple relations but no other joins, same time",
+			msg: "self-join with multiple relations but no other joins",
 			source: `
 out1(a,b,l,t) :- in1(a,a,l,t), in2(b,c,l,t)
 out2(a,b,l,t) :- in2(b,c,l,t), in1(a,a,l,t)
@@ -133,7 +133,7 @@ in2("b","c",L1,0).`,
 			},
 		},
 		{
-			msg: "join on loc and time, same time",
+			msg: "join on loc and time",
 			source: `
 out1(a,b,l,t) :- in1(a,t,l,t), in2(b,l,l,t)
 out2(a,b,l,t) :- in2(b,l,l,t), in1(a,t,l,t)
@@ -147,7 +147,7 @@ in2("4","L2",L1,0).`,
 			},
 		},
 		{
-			msg: "max aggregation, same time",
+			msg: "max aggregation",
 			source: `
 out1(max<a>,b,c,l,t) :- in1(a,b,l,t), in2(b,c,l,t)
 out2(max<a>,b,c,l,t) :- in2(b,c,l,t), in1(a,b,l,t)
@@ -161,7 +161,7 @@ in2("1","2",L1,0).`,
 			},
 		},
 		{
-			msg: "min aggregation, same time",
+			msg: "min aggregation",
 			source: `
 out(min<a>,b,c,l,t) :- in1(a,b,l,t), in2(b,c,l,t)
 in1("1","2",L1,0).
@@ -173,7 +173,7 @@ in2("1","2",L1,0).`,
 			},
 		},
 		{
-			msg: "sum aggregation, same time",
+			msg: "sum aggregation",
 			source: `
 out(b,sum<a>,c,l,t) :- in1(a,b,l,t), in2(b,c,l,t)
 in1("1","2",L1,0).
@@ -185,7 +185,7 @@ in2("1","2",L1,0).`,
 			},
 		},
 		{
-			msg: "count aggregation, same time",
+			msg: "count aggregation",
 			source: `
 out(b,count<a>,c,l,t) :- in1(a,b,l,t), in2(b,c,l,t)
 in1("1","2",L1,0).
@@ -197,7 +197,7 @@ in2("1","2",L1,0).`,
 			},
 		},
 		{
-			msg: "negation, same time",
+			msg: "negation",
 			source: `
 out1(a,b,l,t) :- in1(a,b,l,t), not in2(a,b,l,t)
 out2(a,b,l,t) :- not in2(a,b,l,t), in1(a,b,l,t)
@@ -208,6 +208,24 @@ in2("1","2",L1,0).`,
 			facts: map[string][]*fact{
 				"out1": {{[]string{"3", "2"}, "L1", 0}},
 				"out2": {{[]string{"3", "2"}, "L1", 0}},
+			},
+		},
+		{
+			msg: "(in)equality condition",
+			source: `
+out1(a,b,d,l,t) :- in1(a,b,l,t), in2(c,d,l,t), b=c
+out2(a,b,d,l,t) :- in2(c,d,l,t), in1(a,b,l,t), b=c
+out3(a,b,c,l,t) :- in2(c,d,l,t), in1(a,b,l,t), b!=c
+out4(a,b,c,l,t) :- in2(c,d,l,t), in1(a,b,l,t), b!=c
+in1("1","2",L1,0).
+in1("3","2",L1,0).
+in2("2","3",L1,0).
+in2("1","2",L1,0).`,
+			facts: map[string][]*fact{
+				"out1": {{[]string{"1", "2", "3"}, "L1", 0}, {[]string{"3", "2", "3"}, "L1", 0}},
+				"out2": {{[]string{"1", "2", "3"}, "L1", 0}, {[]string{"3", "2", "3"}, "L1", 0}},
+				"out3": {{[]string{"1", "2", "1"}, "L1", 0}, {[]string{"3", "2", "1"}, "L1", 0}},
+				"out4": {{[]string{"1", "2", "1"}, "L1", 0}, {[]string{"3", "2", "1"}, "L1", 0}},
 			},
 		},
 	}

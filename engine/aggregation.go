@@ -38,30 +38,16 @@ func (a aggregator) Do(prev string, val string) string {
 		prev = "0"
 	}
 
-	float := false
-	var pi int
-	var pf float64
-	var vi int
-	var vf float64
-	var err error
-
-	pi, err = strconv.Atoi(prev)
-	if err != nil {
-		float = true
-	}
-	pf, err = strconv.ParseFloat(prev, 64)
+	pi, pf, floatP, err := stringToNumber(prev)
 	if err != nil {
 		panic(err)
 	}
 
-	vi, err = strconv.Atoi(val)
-	if err != nil {
-		float = true
-	}
-	vf, err = strconv.ParseFloat(val, 64)
+	vi, vf, floatV, err := stringToNumber(val)
 	if err != nil {
 		panic(err)
 	}
+	float := floatP || floatV
 
 	switch a {
 	case aggregatorCount:

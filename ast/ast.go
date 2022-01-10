@@ -24,8 +24,8 @@ type Statement struct {
 type Rule struct {
 	Pos lexer.Position
 
-	Head HeadAtom `parser:"@@ ':-'"`
-	Body []Atom   `parser:"@@ (',' @@)*"`
+	Head HeadAtom   `parser:"@@ ':-'"`
+	Body []BodyTerm `parser:"@@ (',' @@)*"`
 }
 
 type HeadAtom struct {
@@ -42,12 +42,27 @@ type HeadTerm struct {
 	Variable   Variable `parser:"('<' @@ '>')|@@"` // This is a temporary workaround
 }
 
+type BodyTerm struct {
+	Pos lexer.Position
+
+	Atom      *Atom      `parser:"@@ |"`
+	Condition *Condition `parser:"@@"`
+}
+
 type Atom struct {
 	Pos lexer.Position
 
 	Negated   bool       `parser:"@'not'?"`
 	Name      string     `parser:"@Ident"`
 	Variables []Variable `parser:"'(' @@ (',' @@)* ')'"`
+}
+
+type Condition struct {
+	Pos lexer.Position
+
+	Var1    Variable `parser:"@@"`
+	Operand string   `parser:"@('='|'!='|'<'|'>'|'<='|'>=')"`
+	Var2    Variable `parser:"@@"`
 }
 
 type Variable struct {
@@ -78,7 +93,7 @@ var (
 		{"Int", `\d+`, nil},
 		{"String", `"(\\"|[^"])*"`, nil},
 		{"Comment", `#[^\n]*`, nil},
-		{"Oper", `[()<>]|:-`, nil},
+		{"Oper", `[()<>=]|:-|!=|>=|<=`, nil},
 		{"Delim", `[,.]`, nil},
 		{"EOL", `\\n+`, nil},
 		{"whitespace", `\s+`, nil},

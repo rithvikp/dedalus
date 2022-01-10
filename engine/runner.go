@@ -77,6 +77,12 @@ type variable struct {
 	attrs map[string][]*attribute
 }
 
+type condition struct {
+	v1 *variable
+	v2 *variable
+	op string
+}
+
 type headTerm struct {
 	agg *aggregator // Optional
 	v   *variable
@@ -87,6 +93,7 @@ type rule struct {
 	head        *relation
 	body        []*relation
 	negatedBody []*relation
+	conditions  []condition
 
 	// The index in the head relation mapped to the corresponding variable in the body.
 	headVarMapping []headTerm
@@ -112,6 +119,23 @@ type Runner struct {
 	locations        map[string]struct{}
 }
 
+// stringToNumber converts the given string to an integer (if possible) and a float. If the returned
+// boolean is true, only the float representation is valid.
+func stringToNumber(s string) (int, float64, bool, error) {
+	float := false
+	i, err := strconv.Atoi(s)
+	if err != nil {
+		float = true
+	}
+
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, 0, false, err
+	}
+
+	return i, f, float, nil
+}
+
 func (f *fact) equals(other *fact) bool {
 	if len(f.data) != len(other.data) {
 		return false
@@ -127,6 +151,50 @@ func (f *fact) equals(other *fact) bool {
 		}
 	}
 	return true
+}
+
+func (c condition) Eval(val1, val2 string) bool {
+	switch c.op {
+	case "=":
+		return val1 == val2
+	case "!=":
+		return val1 != val2
+	}
+
+	v1i, v1f, float1, err := stringToNumber(val1)
+	if err != nil {
+		panic(err)
+	}
+	v2i, v2f, float2, err := stringToNumber(val2)
+	if err != nil {
+		panic(err)
+	}
+	float := float1 || float2
+
+	switch c.op {
+	case ">":
+		if !float {
+			return v1i > v2i
+		}
+		return v1f > v2f
+	case ">=":
+		if !float {
+			return v1i >= v2i
+		}
+		return v1f >= v2f
+	case "<":
+		if !float {
+			return v1i < v2i
+		}
+		return v1f < v2f
+	case "<=":
+		if !float {
+			return v1i <= v2i
+		}
+		return v1f <= v2f
+	}
+
+	return false
 }
 
 func NewRunner(p *ast.Program) (*Runner, error) {
@@ -216,9 +284,16 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 			}
 
 			var lateAtoms []*ast.Atom
-			for _, astAtom := range astRule.Body {
+			var conditions []*ast.Condition
+			for _, astTerm := range astRule.Body {
+				if astTerm.Condition != nil {
+					conditions = append(conditions, astTerm.Condition)
+					continue
+				}
+
+				astAtom := astTerm.Atom
 				if _, ok := lateHandleAtoms[astAtom.Name]; ok {
-					lateAtoms = append(lateAtoms, &astAtom)
+					lateAtoms = append(lateAtoms, astAtom)
 					continue
 				}
 
@@ -303,6 +378,18 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 
 					r.vars[astAtom.Name][j] = v
 				}
+			}
+
+			for _, astCond := range conditions {
+				v1, ok := vars[astCond.Var1.Name]
+				if !ok {
+					return nil, newSemanticError(fmt.Sprintf("all variables in conditions must show up in a positive atom: %q does not", astCond.Var1.Name), astCond.Var1.Pos)
+				}
+				v2, ok := vars[astCond.Var2.Name]
+				if !ok {
+					return nil, newSemanticError(fmt.Sprintf("all variables in conditions must show up in a positive atom: %q does not", astCond.Var2.Name), astCond.Var2.Pos)
+				}
+				r.conditions = append(r.conditions, condition{v1: v1, v2: v2, op: astCond.Operand})
 			}
 
 			for _, astAtom := range lateAtoms {

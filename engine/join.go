@@ -103,15 +103,6 @@ func join(rl *rule, loc string, time int) [][]string {
 				val := f.data[attrs[0].index]
 
 				fn.lockedVars[v] = val
-				// Ensure time and location constraints are maintained
-				//if v == rl.bodyLocVar && val != loc {
-				//consistent = false
-				//} else if v == rl.bodyTimeVar && val != strconv.Itoa(time) {
-				//consistent = false
-				//}
-				//if !consistent {
-				//break
-				//}
 			}
 			if consistent {
 				children = append(children, fn)
@@ -143,6 +134,8 @@ func join(rl *rule, loc string, time int) [][]string {
 			}
 		}
 
+		// TODO: There are many ways in which this section needs to be optimized (mainly in terms of
+		// short-circuiting)
 		consistent := true
 		for _, rel := range rl.negatedBody {
 			nd := make([]string, len(rel.indexes))
@@ -153,6 +146,18 @@ func join(rl *rule, loc string, time int) [][]string {
 				}
 			}
 			if rel.contains(nd, loc, time) {
+				consistent = false
+				break
+			}
+		}
+		if !consistent {
+			continue
+		}
+
+		for _, cond := range rl.conditions {
+			val1 := value(cond.v1)
+			val2 := value(cond.v2)
+			if !cond.Eval(val1, val2) {
 				consistent = false
 				break
 			}
