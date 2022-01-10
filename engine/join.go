@@ -130,10 +130,10 @@ func join(rl *rule, loc string, time int) [][]string {
 		fringe = nextFringe
 	}
 
-	data := make([][]string, len(fringe))
-	for i, fn := range fringe {
+	data := make([][]string, 0, len(fringe))
+	for _, fn := range fringe {
 		d := make([]string, len(rl.head.indexes)+1)
-		assignVar := func(v *variable) string {
+		value := func(v *variable) string {
 			if v == rl.bodyLocVar {
 				return loc
 			} else if v == rl.bodyTimeVar {
@@ -143,12 +143,30 @@ func join(rl *rule, loc string, time int) [][]string {
 			}
 		}
 
-		for j, ht := range rl.headVarMapping {
-			d[j] = assignVar(ht.v)
+		consistent := true
+		for _, rel := range rl.negatedBody {
+			nd := make([]string, len(rel.indexes))
+			for _, v := range rl.vars[rel.id] {
+				val := value(v)
+				for _, a := range v.attrs[rel.id] {
+					nd[a.index] = val
+				}
+			}
+			if rel.contains(nd, loc, time) {
+				consistent = false
+				break
+			}
+		}
+		if !consistent {
+			continue
 		}
 
-		d[len(d)-1] = assignVar(rl.headLocVar)
-		data[i] = d
+		for j, ht := range rl.headVarMapping {
+			d[j] = value(ht.v)
+		}
+
+		d[len(d)-1] = value(rl.headLocVar)
+		data = append(data, d)
 	}
 
 	return data

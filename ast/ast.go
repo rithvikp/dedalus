@@ -45,6 +45,7 @@ type HeadTerm struct {
 type Atom struct {
 	Pos lexer.Position
 
+	Negated   bool       `parser:"@'not'?"`
 	Name      string     `parser:"@Ident"`
 	Variables []Variable `parser:"'(' @@ (',' @@)* ')'"`
 }

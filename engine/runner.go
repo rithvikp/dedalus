@@ -15,6 +15,9 @@ import (
 	"github.com/rithvikp/dedalus/ast"
 )
 
+// TODO: underscore identifiers, validate for safe negation, conditions, user-defined r.r.t.'s,
+//	     auto-persisted relations
+
 type SemanticError struct {
 	Position lexer.Position
 	Message  string
@@ -80,9 +83,10 @@ type headTerm struct {
 }
 
 type rule struct {
-	id   string
-	head *relation
-	body []*relation
+	id          string
+	head        *relation
+	body        []*relation
+	negatedBody []*relation
 
 	// The index in the head relation mapped to the corresponding variable in the body.
 	headVarMapping []headTerm
@@ -229,7 +233,11 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 					return nil, err
 				}
 
-				r.body = append(r.body, rel)
+				if astAtom.Negated {
+					r.negatedBody = append(r.negatedBody, rel)
+				} else {
+					r.body = append(r.body, rel)
+				}
 				r.vars[astAtom.Name] = make([]*variable, len(astAtom.Variables)-2)
 
 				addToHeadVarMapping := func(v *variable) {

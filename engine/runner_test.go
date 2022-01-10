@@ -50,14 +50,43 @@ in1("3","2",L1,0).
 in2("2","3",L1,0).
 in2("1","2",L1,0).`,
 			facts: map[string][]*fact{
-				"out1": {
-					{[]string{"1", "2", "3"}, "L1", 0},
-					{[]string{"3", "2", "3"}, "L1", 0},
+				"out1": {{[]string{"1", "2", "3"}, "L1", 0}, {[]string{"3", "2", "3"}, "L1", 0}},
+				"out2": {{[]string{"1", "2", "3"}, "L1", 0}, {[]string{"3", "2", "3"}, "L1", 0}},
+			},
+		},
+		{
+			msg: "large join, same time",
+			source: `
+out(a,b,c,d,f,l,t) :- in1(a,b,l,t), in2(b,c,l,t), in3(c,d,l,t), in4(e,f,l,t)
+in1("1","2",L1,0).
+in1("3","2",L1,0).
+in2("2","3",L1,0).
+in2("1","2",L1,0).
+in3("3","4",L1,0).
+in3("4","5",L1,0).
+in4("1","2",L1,0).
+in4("3","4",L1,0).`,
+			facts: map[string][]*fact{
+				"out": {
+					{[]string{"1", "2", "3", "4", "2"}, "L1", 0},
+					{[]string{"1", "2", "3", "4", "4"}, "L1", 0},
+					{[]string{"3", "2", "3", "4", "2"}, "L1", 0},
+					{[]string{"3", "2", "3", "4", "4"}, "L1", 0},
 				},
-				"out2": {
-					{[]string{"1", "2", "3"}, "L1", 0},
-					{[]string{"3", "2", "3"}, "L1", 0},
-				},
+			},
+		},
+		{
+			msg: "join, successor",
+			source: `
+out1(a,b,c,l,t') :- in1(a,b,l,t), in2(b,c,l,t), succ(t,t')
+out2(a,b,c,l,t') :- in2(b,c,l,t), in1(a,b,l,t), succ(t,t')
+in1("1","2",L1,0).
+in1("3","2",L1,0).
+in2("2","3",L1,0).
+in2("1","2",L1,0).`,
+			facts: map[string][]*fact{
+				"out1": {{[]string{"1", "2", "3"}, "L1", 1}, {[]string{"3", "2", "3"}, "L1", 1}},
+				"out2": {{[]string{"1", "2", "3"}, "L1", 1}, {[]string{"3", "2", "3"}, "L1", 1}},
 			},
 		},
 		{
@@ -84,14 +113,8 @@ in2("a","b",L1,0).
 in2("a","c",L1,0).
 in2("b","c",L1,0).`,
 			facts: map[string][]*fact{
-				"out1": {
-					{[]string{"a", "b"}, "L1", 0},
-					{[]string{"a", "c"}, "L1", 0},
-				},
-				"out2": {
-					{[]string{"a", "b"}, "L1", 0},
-					{[]string{"a", "c"}, "L1", 0},
-				},
+				"out1": {{[]string{"a", "b"}, "L1", 0}, {[]string{"a", "c"}, "L1", 0}},
+				"out2": {{[]string{"a", "b"}, "L1", 0}, {[]string{"a", "c"}, "L1", 0}},
 			},
 		},
 		{
@@ -105,14 +128,8 @@ in1("b","c",L1,0).
 in2("a","b",L1,0).
 in2("b","c",L1,0).`,
 			facts: map[string][]*fact{
-				"out1": {
-					{[]string{"a", "a"}, "L1", 0},
-					{[]string{"a", "b"}, "L1", 0},
-				},
-				"out2": {
-					{[]string{"a", "a"}, "L1", 0},
-					{[]string{"a", "b"}, "L1", 0},
-				},
+				"out1": {{[]string{"a", "a"}, "L1", 0}, {[]string{"a", "b"}, "L1", 0}},
+				"out2": {{[]string{"a", "a"}, "L1", 0}, {[]string{"a", "b"}, "L1", 0}},
 			},
 		},
 		{
@@ -177,6 +194,20 @@ in2("2","3",L1,0).
 in2("1","2",L1,0).`,
 			facts: map[string][]*fact{
 				"out": {{[]string{"2", "2", "3"}, "L1", 0}},
+			},
+		},
+		{
+			msg: "negation, same time",
+			source: `
+out1(a,b,l,t) :- in1(a,b,l,t), not in2(a,b,l,t)
+out2(a,b,l,t) :- not in2(a,b,l,t), in1(a,b,l,t)
+in1("1","2",L1,0).
+in1("3","2",L1,0).
+in2("2","3",L1,0).
+in2("1","2",L1,0).`,
+			facts: map[string][]*fact{
+				"out1": {{[]string{"3", "2"}, "L1", 0}},
+				"out2": {{[]string{"3", "2"}, "L1", 0}},
 			},
 		},
 	}
