@@ -59,15 +59,6 @@ type locTime struct {
 	timestamp int
 }
 
-type relation struct {
-	id          string
-	readOnly    bool
-	autoPersist bool // Pascal-Cased relations are automatically persisted
-
-	bodyRules []*rule
-	indexes   []map[string]map[locTime][]*fact
-}
-
 type attribute struct {
 	relation *relation
 	index    int
@@ -76,6 +67,11 @@ type attribute struct {
 type variable struct {
 	id    string
 	attrs map[string][]*attribute
+}
+
+type assignment struct {
+	v *variable
+	e expression
 }
 
 type condition struct {
@@ -107,6 +103,7 @@ type rule struct {
 	body        []*relation
 	negatedBody []*relation
 	conditions  []condition
+	assignments []assignment
 
 	// The index in the head relation mapped to the corresponding variable in the body.
 	headVarMapping []headTerm
@@ -275,16 +272,12 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 			if vars+lenOff < 0 {
 				return nil, newSemanticError(fmt.Sprintf("%q, which is not a replicated read-only relation, must have time and location attributes", id), pos)
 			}
-			r = &relation{
-				id:          id,
-				readOnly:    readOnly,
-				autoPersist: strings.ToUpper(id[0:1]) == id[0:1],
-				indexes:     make([]map[string]map[locTime][]*fact, vars+lenOff),
-			}
 
-			for i := range r.indexes {
-				r.indexes[i] = map[string]map[locTime][]*fact{}
-			}
+			r = newRelation(id, readOnly, strings.ToUpper(id[0:1]) == id[0:1], vars+lenOff)
+
+			// FIXME
+			//r.autoPersist = !r.autoPersist
+
 			runner.relations[id] = r
 			if !head && rl != nil {
 				r.bodyRules = append(r.bodyRules, rl)
@@ -293,9 +286,8 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 			if r.readOnly && head {
 				return nil, newSemanticError(fmt.Sprintf("%q, a read-only, relation cannot appear in the head of any rule", id), pos)
 			}
-			if !r.readOnly && len(r.indexes) != vars-2 || r.readOnly && len(r.indexes) != vars {
-				fmt.Println(r.id, r.readOnly, vars, len(r.indexes))
-				return nil, newSemanticError("the number of attributes must be constant for any given relation", pos)
+			if !r.readOnly && r.numAttrs() != vars-2 || r.readOnly && r.numAttrs() != vars {
+				return nil, newSemanticError(fmt.Sprintf("the number of attributes must be constant for any given relation, but %q had %d attributes initially and has %d attributes now", r.id, r.numAttrs(), vars), pos)
 			}
 			if !head && rl != nil {
 				r.bodyRules = append(r.bodyRules, rl)
@@ -329,7 +321,7 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 				return nil, err
 			}
 
-			if len(row) != len(rel.indexes) {
+			if len(row) != rel.numAttrs() {
 				return nil, newSemanticError("preload has a different number of attributes than the relation", astPreload.Pos)
 			}
 
@@ -393,6 +385,18 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 			aggregatedIndices[j] = agg
 		}
 
+		addToHeadVarMapping := func(v *variable) {
+			if indices, ok := headVars[v.id]; ok {
+				for _, k := range indices {
+					hv := headTerm{v: v}
+					if agg, ok := aggregatedIndices[k]; ok {
+						hv.agg = &agg
+					}
+					rl.headVarMapping[k] = hv
+				}
+			}
+		}
+
 		var lateAtoms []*ast.Atom
 		var conditions []*ast.Condition
 		for _, astTerm := range astRule.Body {
@@ -425,18 +429,6 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 				rl.body = append(rl.body, rel)
 			}
 			rl.vars[astAtom.Name] = make([]*variable, 0, len(astAtom.Variables))
-
-			addToHeadVarMapping := func(v *variable) {
-				if indices, ok := headVars[v.id]; ok {
-					for _, k := range indices {
-						hv := headTerm{v: v}
-						if agg, ok := aggregatedIndices[k]; ok {
-							hv.agg = &agg
-						}
-						rl.headVarMapping[k] = hv
-					}
-				}
-			}
 
 			if !rel.readOnly {
 				atomLoc := astAtom.Variables[len(astAtom.Variables)-2].Name
@@ -496,17 +488,27 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 		}
 
 		for _, astCond := range conditions {
+			canBeAssignment := true
+			isAssignment := false
+
 			parseFirstTerm := func(astE *ast.Expression) (expression, error) {
 				if astE.Var != nil {
 					v, ok := vars[astE.Var.Name]
-					if !ok {
-						return nil, newSemanticError(fmt.Sprintf("all variables in conditions must show up in a positive atom: %q does not", astE.Var.Name), astE.Var.Pos)
+					if !ok && (!canBeAssignment || astE.Expr != nil) {
+						return nil, newSemanticError(fmt.Sprintf("all variables in conditions must first show up in a positive atom or an assignment: %q does not", astE.Var.Name), astE.Var.Pos)
+					} else if !ok && canBeAssignment && astE.Expr == nil {
+						v = &variable{id: astE.Var.Name}
+						addToHeadVarMapping(v)
+						vars[v.id] = v
+						isAssignment = true
+						canBeAssignment = false
 					}
 					return v, nil
 				} else {
 					return number(*astE.Num), nil
 				}
 			}
+
 			parseExpr := func(astE *ast.Expression) (expression, error) {
 				var e expression
 				v, err := parseFirstTerm(astE)
@@ -554,7 +556,14 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 				return nil, err
 			}
 
-			rl.conditions = append(rl.conditions, condition{e1: e1, e2: e2, op: astCond.Operand})
+			if isAssignment {
+				if astCond.Operand != "=" {
+					return nil, newSemanticError("assignments must use the \"=\" operator", astCond.Pos)
+				}
+				rl.assignments = append(rl.assignments, assignment{v: e1.(*variable), e: e2})
+			} else {
+				rl.conditions = append(rl.conditions, condition{e1: e1, e2: e2, op: astCond.Operand})
+			}
 		}
 
 		for _, astAtom := range lateAtoms {

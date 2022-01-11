@@ -259,6 +259,18 @@ in2("1","2",L1,0).`,
 			},
 		},
 		{
+			msg: "direct assignments",
+			source: `
+out(a,b,c,e,l,t) :- in1(a,b,l,t), in2(c,d,l,t), e=c+2, c=b-1
+in1("1","2",L1,0).
+in1("3","2",L1,0).
+in2("2","3",L1,0).
+in2("1","2",L1,0).`,
+			facts: map[string][]*fact{
+				"out": {{[]string{"1", "2", "1", "3"}, "L1", 0}, {[]string{"3", "2", "1", "3"}, "L1", 0}},
+			},
+		},
+		{
 			msg: "user-defined read-only replicated tables",
 			source: `
 out1(a,b,c,l,t) :- in1(a,b), in2(b,c,l,t)
@@ -288,6 +300,19 @@ in2("1","2",L1,0).`,
 					{[]string{"1", "2", "3"}, "L1", 0}, {[]string{"3", "2", "3"}, "L1", 0},
 					{[]string{"1", "2", "3"}, "L1", 1}, {[]string{"3", "2", "3"}, "L1", 1},
 				},
+			},
+		},
+		{
+			msg: "relation without any actual data",
+			source: `
+out(b,c,l,t) :- in1(l,t), in2(b,c,l,t)
+in1(L1,0).
+in1(L1,1).
+in2("2","3",L1,0).
+in2("1","2",L1,0).
+in2("1","5",L2,0).`,
+			facts: map[string][]*fact{
+				"out": {{[]string{"1", "2"}, "L1", 0}, {[]string{"2", "3"}, "L1", 0}},
 			},
 		},
 	}

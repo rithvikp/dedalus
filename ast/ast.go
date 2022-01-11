@@ -85,10 +85,10 @@ type Variable struct {
 type Preload struct {
 	Pos lexer.Position
 
-	Name   string         `parser:"@Ident"`
-	Fields []PreloadField `parser:"'(' @@ (',' @@)*"`
-	Loc    *string        `parser:"(',' @Ident ','"`
-	Time   *int           `parser:"@Int)?')'"`
+	Name   string         `parser:"@Ident '('"`
+	Fields []PreloadField `parser:"(@@ ',')* ((@@ ')') |"`
+	Loc    *string        `parser:"(@Ident ','"`
+	Time   *int           `parser:"@Int ')'))"`
 }
 
 type PreloadField struct {
@@ -109,7 +109,7 @@ var (
 		{"whitespace", `\s+`, nil},
 	})
 
-	parser = participle.MustBuild(&Program{}, participle.Lexer(lex), participle.UseLookahead(2))
+	parser = participle.MustBuild(&Program{}, participle.Lexer(lex), participle.UseLookahead(3))
 )
 
 func Parse(r io.Reader) (*Program, error) {

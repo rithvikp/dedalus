@@ -121,7 +121,7 @@ func join(rl *rule, loc string, time int) [][]string {
 
 	data := make([][]string, 0, len(fringe))
 	for _, fn := range fringe {
-		d := make([]string, len(rl.head.indexes)+1)
+		d := make([]string, rl.head.numAttrs()+1)
 		value := func(v *variable) string {
 			if v == rl.bodyLocVar {
 				return loc
@@ -136,7 +136,7 @@ func join(rl *rule, loc string, time int) [][]string {
 		// short-circuiting)
 		consistent := true
 		for _, rel := range rl.negatedBody {
-			nd := make([]string, len(rel.indexes))
+			nd := make([]string, rel.numAttrs())
 			for _, v := range rl.vars[rel.id] {
 				val := value(v)
 				for _, a := range v.attrs[rel.id] {
@@ -150,6 +150,10 @@ func join(rl *rule, loc string, time int) [][]string {
 		}
 		if !consistent {
 			continue
+		}
+
+		for _, a := range rl.assignments {
+			fn.lockedVars[a.v] = a.e.Eval(value)
 		}
 
 		for _, cond := range rl.conditions {
