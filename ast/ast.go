@@ -76,9 +76,9 @@ type Preload struct {
 	Pos lexer.Position
 
 	Name   string         `parser:"@Ident"`
-	Fields []PreloadField `parser:"'(' (@@ ',')+"`
-	Loc    string         `parser:"@Ident ','"`
-	Time   int            `parser:"@Int')'"`
+	Fields []PreloadField `parser:"'(' @@ (',' @@)*"`
+	Loc    *string        `parser:"(',' @Ident ','"`
+	Time   *int           `parser:"@Int)?')'"`
 }
 
 type PreloadField struct {
@@ -89,7 +89,7 @@ type PreloadField struct {
 
 var (
 	lex = lexer.MustSimple([]lexer.Rule{
-		{"Ident", `[a-zA-Z]([a-zA-Z0-9_'])*`, nil},
+		{"Ident", `([a-zA-Z]([a-zA-Z0-9_'])*)|_`, nil},
 		{"Int", `\d+`, nil},
 		{"String", `"(\\"|[^"])*"`, nil},
 		{"Comment", `#[^\n]*`, nil},

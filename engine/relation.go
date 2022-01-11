@@ -1,17 +1,23 @@
 package engine
 
+func (r *relation) empty() bool {
+	return len(r.indexes[0]) == 0
+}
+
 func (r *relation) push(d []string, loc string, time int) bool {
 	if r.contains(d, loc, time) {
 		return false
 	}
+	lt := locTime{}
+	if !r.readOnly {
+		lt = locTime{loc, time}
+	}
 
 	f := &fact{
 		data:      d,
-		location:  loc,
-		timestamp: time,
+		location:  lt.location,
+		timestamp: lt.timestamp,
 	}
-
-	lt := locTime{location: loc, timestamp: time}
 
 	for i := range d {
 		if _, ok := r.indexes[i][d[i]]; !ok {
@@ -28,10 +34,9 @@ func (r *relation) contains(d []string, loc string, time int) bool {
 		return false
 	}
 
-	lt := locTime{location: loc, timestamp: time}
 	var factSet []*fact
 	var ok bool
-	if factSet, ok = r.indexes[0][d[0]][lt]; !ok {
+	if factSet, ok = r.lookup(0, d[0], loc, time); !ok {
 		return false
 	}
 
@@ -51,14 +56,23 @@ func (r *relation) contains(d []string, loc string, time int) bool {
 	return false
 }
 
+func (r *relation) lookup(attrIndex int, attrVal string, loc string, time int) ([]*fact, bool) {
+	lt := locTime{}
+	if !r.readOnly {
+		lt = locTime{loc, time}
+	}
+
+	matched, ok := r.indexes[attrIndex][attrVal][lt]
+	return matched, ok
+}
+
 // TODO: Replace this with an iterator-like variant for efficiency
 func (r *relation) all(loc string, time int) []*fact {
 	var facts []*fact
-	lt := locTime{loc, time}
-	for _, factSuperSet := range r.indexes[0] {
-		for _, f := range factSuperSet[lt] {
-			facts = append(facts, f)
-		}
+	for attr := range r.indexes[0] {
+		// A match is guaranteed to be found
+		matched, _ := r.lookup(0, attr, loc, time)
+		facts = append(facts, matched...)
 	}
 
 	return facts

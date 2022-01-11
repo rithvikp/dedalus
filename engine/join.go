@@ -9,8 +9,6 @@ type factNode struct {
 }
 
 func join(rl *rule, loc string, time int) [][]string {
-	lt := locTime{loc, time}
-
 	var fringe []*factNode
 	rel := rl.body[0]
 	for _, f := range rel.all(loc, time) {
@@ -49,7 +47,7 @@ func join(rl *rule, loc string, time int) [][]string {
 			var matched []*fact
 			attrs := v.attrs[rel.id]
 			if val, ok := node.lockedVars[v]; ok {
-				matched, ok = rel.indexes[attrs[0].index][val][lt]
+				matched, ok = rel.lookup(attrs[0].index, val, loc, time)
 				if !ok {
 					return nil
 				}
