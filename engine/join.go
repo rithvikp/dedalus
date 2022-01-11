@@ -153,9 +153,7 @@ func join(rl *rule, loc string, time int) [][]string {
 		}
 
 		for _, cond := range rl.conditions {
-			val1 := value(cond.v1)
-			val2 := value(cond.v2)
-			if !cond.Eval(val1, val2) {
+			if !cond.Eval(value) {
 				consistent = false
 				break
 			}

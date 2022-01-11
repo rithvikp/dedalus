@@ -215,18 +215,6 @@ in2("1","2",L1,0).`,
 			},
 		},
 		{
-			msg: "first aggregation",
-			source: `
-out(first<a>,b,c,l,t) :- in1(a,b,l,t), in2(b,c,l,t)
-in1("1","2",L1,0).
-in1("3","2",L1,0).
-in2("2","3",L1,0).
-in2("1","2",L1,0).`,
-			facts: map[string][]*fact{
-				"out": {{[]string{"1", "2", "3"}, "L1", 0}},
-			},
-		},
-		{
 			msg: "negation",
 			source: `
 out1(a,b,l,t) :- in1(a,b,l,t), not in2(a,b,l,t)
@@ -259,17 +247,32 @@ in2("1","2",L1,0).`,
 			},
 		},
 		{
+			msg: "equality condition with expressions",
+			source: `
+out(a,b,c,l,t) :- in1(a,b,l,t), in2(c,d,l,t), c=b-1
+in1("1","2",L1,0).
+in1("3","2",L1,0).
+in2("2","3",L1,0).
+in2("1","2",L1,0).`,
+			facts: map[string][]*fact{
+				"out": {{[]string{"1", "2", "1"}, "L1", 0}, {[]string{"3", "2", "1"}, "L1", 0}},
+			},
+		},
+		{
 			msg: "user-defined read-only replicated tables",
 			source: `
 out1(a,b,c,l,t) :- in1(a,b), in2(b,c,l,t)
 out2(a,b,c,l,t) :- in2(b,c,l,t), in1(a,b)
+out3(b,c,l,t) :- in2(b,c,l,t), in3(c)
 in1("1","2").
 in1("3","2").
 in2("2","3",L1,0).
-in2("1","2",L1,0).`,
+in2("1","2",L1,0).
+in3("3").`,
 			facts: map[string][]*fact{
 				"out1": {{[]string{"1", "2", "3"}, "L1", 0}, {[]string{"3", "2", "3"}, "L1", 0}},
 				"out2": {{[]string{"1", "2", "3"}, "L1", 0}, {[]string{"3", "2", "3"}, "L1", 0}},
+				"out3": {{[]string{"2", "3"}, "L1", 0}},
 			},
 		},
 		{

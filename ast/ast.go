@@ -60,9 +60,19 @@ type Atom struct {
 type Condition struct {
 	Pos lexer.Position
 
-	Var1    Variable `parser:"@@"`
-	Operand string   `parser:"@('='|'!='|'<'|'>'|'<='|'>=')"`
-	Var2    Variable `parser:"@@"`
+	Expr1   Expression `parser:"@@"`
+	Operand string     `parser:"@('<='|'>='|'='|'!='|'<'|'>')"`
+	Expr2   Expression `parser:"@@"`
+}
+
+type Expression struct {
+	Pos lexer.Position
+
+	Var *Variable `parser:"(@@|"`
+	Num *int      `parser:"@Int)"`
+
+	Op   *string     `parser:"(@('+'|'-'|'*'|'/')"`
+	Expr *Expression `parser:"@@)?"`
 }
 
 type Variable struct {
@@ -93,7 +103,7 @@ var (
 		{"Int", `\d+`, nil},
 		{"String", `"(\\"|[^"])*"`, nil},
 		{"Comment", `#[^\n]*`, nil},
-		{"Oper", `[()<>=]|:-|!=|>=|<=`, nil},
+		{"Oper", `:-|!=|>=|<=|[()<>=+*/-]`, nil},
 		{"Delim", `[,.]`, nil},
 		{"EOL", `\\n+`, nil},
 		{"whitespace", `\s+`, nil},

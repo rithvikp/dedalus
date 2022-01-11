@@ -79,10 +79,22 @@ type variable struct {
 }
 
 type condition struct {
-	v1 *variable
-	v2 *variable
+	e1 expression
+	e2 expression
 	op string
 }
+
+type expression interface {
+	Eval(value func(v *variable) string) string
+}
+
+type binOp struct {
+	e1 expression
+	e2 expression
+	op string
+}
+
+type number int
 
 type headTerm struct {
 	agg *aggregator // Optional
@@ -154,7 +166,10 @@ func (f *fact) equals(other *fact) bool {
 	return true
 }
 
-func (c condition) Eval(val1, val2 string) bool {
+func (c condition) Eval(value func(v *variable) string) bool {
+	val1 := c.e1.Eval(value)
+	val2 := c.e2.Eval(value)
+
 	switch c.op {
 	case "=":
 		return val1 == val2
@@ -198,6 +213,49 @@ func (c condition) Eval(val1, val2 string) bool {
 	return false
 }
 
+func (v *variable) Eval(value func(v *variable) string) string {
+	return value(v)
+}
+
+func (n number) Eval(value func(v *variable) string) string {
+	return strconv.Itoa(int(n))
+}
+
+func (bo *binOp) Eval(value func(v *variable) string) string {
+	e1 := bo.e1.Eval(value)
+	e2 := bo.e2.Eval(value)
+
+	v1i, v1f, float1, err := stringToNumber(e1)
+	if err != nil {
+		panic(err)
+	}
+	v2i, v2f, float2, err := stringToNumber(e2)
+	if err != nil {
+		panic(err)
+	}
+	float := float1 || float2
+
+	switch bo.op {
+	case "+":
+		if !float {
+			return strconv.Itoa(v1i + v2i)
+		}
+		return fmt.Sprintf("%f", v1f+v2f)
+	case "-":
+		if !float {
+			return strconv.Itoa(v1i - v2i)
+		}
+		return fmt.Sprintf("%f", v1f-v2f)
+	case "*":
+		if !float {
+			return strconv.Itoa(v1i - v2i)
+		}
+		return fmt.Sprintf("%f", v1f-v2f)
+	}
+
+	return ""
+}
+
 func NewRunner(p *ast.Program) (*Runner, error) {
 	runner := Runner{
 		relations: map[string]*relation{},
@@ -213,12 +271,17 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 			if !readOnly {
 				lenOff = -2
 			}
+
+			if vars+lenOff < 0 {
+				return nil, newSemanticError(fmt.Sprintf("%q, which is not a replicated read-only relation, must have time and location attributes", id), pos)
+			}
 			r = &relation{
 				id:          id,
 				readOnly:    readOnly,
 				autoPersist: strings.ToUpper(id[0:1]) == id[0:1],
 				indexes:     make([]map[string]map[locTime][]*fact, vars+lenOff),
 			}
+
 			for i := range r.indexes {
 				r.indexes[i] = map[string]map[locTime][]*fact{}
 			}
@@ -267,7 +330,6 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 			}
 
 			if len(row) != len(rel.indexes) {
-				fmt.Println(rel.id, len(row), len(rel.indexes), len(astPreload.Fields), astPreload.Time)
 				return nil, newSemanticError("preload has a different number of attributes than the relation", astPreload.Pos)
 			}
 
@@ -290,7 +352,7 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 
 		astHeadVars := astRule.Head.Terms
 		if len(astHeadVars) < 2 {
-			return nil, newSemanticError("all non-replicated read-only relations must have time and location attributes", astRule.Head.Pos)
+			return nil, newSemanticError(fmt.Sprintf("%q is not a replicated read-only relation so must have time and location attributes", astRule.Head.Name), astRule.Head.Pos)
 		}
 
 		var err error
@@ -345,16 +407,16 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 				continue
 			}
 
-			// TODO: Cleanup time/loc parsing (there are many "-2"'s when looking at # of variables
-			// due to this issue). This is especially confusing due to intricacies with read-only
-			// tables.
-			if len(astAtom.Variables) < 2 {
-				return nil, newSemanticError("all non-replicated read-only relations must have time and location attributes", astRule.Head.Pos)
-			}
-
 			rel, err := addRel(astAtom.Name, len(astAtom.Variables), astAtom.Pos, false, true, false, rl)
 			if err != nil {
 				return nil, err
+			}
+
+			// TODO: Cleanup time/loc parsing (there are many "-2"'s when looking at # of variables
+			// due to this issue). This is especially confusing due to intricacies with read-only
+			// tables.
+			if !rel.readOnly && len(astAtom.Variables) < 2 {
+				return nil, newSemanticError(fmt.Sprintf("%q is not a replicated read-only relation so must have time and location attributes", astAtom.Name), astAtom.Pos)
 			}
 
 			if astAtom.Negated {
@@ -362,7 +424,7 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 			} else {
 				rl.body = append(rl.body, rel)
 			}
-			rl.vars[astAtom.Name] = make([]*variable, 0, len(astAtom.Variables)-2)
+			rl.vars[astAtom.Name] = make([]*variable, 0, len(astAtom.Variables))
 
 			addToHeadVarMapping := func(v *variable) {
 				if indices, ok := headVars[v.id]; ok {
@@ -434,15 +496,65 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 		}
 
 		for _, astCond := range conditions {
-			v1, ok := vars[astCond.Var1.Name]
-			if !ok {
-				return nil, newSemanticError(fmt.Sprintf("all variables in conditions must show up in a positive atom: %q does not", astCond.Var1.Name), astCond.Var1.Pos)
+			parseFirstTerm := func(astE *ast.Expression) (expression, error) {
+				if astE.Var != nil {
+					v, ok := vars[astE.Var.Name]
+					if !ok {
+						return nil, newSemanticError(fmt.Sprintf("all variables in conditions must show up in a positive atom: %q does not", astE.Var.Name), astE.Var.Pos)
+					}
+					return v, nil
+				} else {
+					return number(*astE.Num), nil
+				}
 			}
-			v2, ok := vars[astCond.Var2.Name]
-			if !ok {
-				return nil, newSemanticError(fmt.Sprintf("all variables in conditions must show up in a positive atom: %q does not", astCond.Var2.Name), astCond.Var2.Pos)
+			parseExpr := func(astE *ast.Expression) (expression, error) {
+				var e expression
+				v, err := parseFirstTerm(astE)
+				if err != nil {
+					return nil, err
+				}
+				e = v
+
+				if astE.Expr != nil {
+					v, err = parseFirstTerm(astE)
+					if err != nil {
+						return nil, err
+					}
+
+					var bo *binOp
+					for astE.Expr != nil {
+						if bo == nil {
+							bo = &binOp{}
+							e = bo
+						} else {
+							bo2 := &binOp{}
+							bo.e2 = bo2
+							bo = bo2
+						}
+						bo.e1 = v
+						bo.op = *astE.Op
+						astE = astE.Expr
+					}
+
+					v, err = parseFirstTerm(astE)
+					if err != nil {
+						return nil, err
+					}
+					bo.e2 = v
+				}
+				return e, nil
 			}
-			rl.conditions = append(rl.conditions, condition{v1: v1, v2: v2, op: astCond.Operand})
+
+			e1, err := parseExpr(&astCond.Expr1)
+			if err != nil {
+				return nil, err
+			}
+			e2, err := parseExpr(&astCond.Expr2)
+			if err != nil {
+				return nil, err
+			}
+
+			rl.conditions = append(rl.conditions, condition{e1: e1, e2: e2, op: astCond.Operand})
 		}
 
 		for _, astAtom := range lateAtoms {
@@ -460,14 +572,16 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 					return nil, newSemanticError("the second variable in choose relations must be the head relation's time variable", astAtom.Variables[1].Pos)
 				}
 
-				t := astAtom.Variables[0].NameTuple
-				if len(t) != len(rl.headVarMapping) {
-					return nil, newSemanticError("the first element of a choose relation must be a tuple of all the corresponding head variables (in the same order as in the head)", astAtom.Pos)
-				}
+				if astAtom.Variables[0].Name != "_" {
+					t := astAtom.Variables[0].NameTuple
+					if len(t) != len(rl.headVarMapping) {
+						return nil, newSemanticError("the first element of a choose relation must be a tuple of all the corresponding head variables (in the same order as in the head)", astAtom.Pos)
+					}
 
-				for i, v := range rl.headVarMapping {
-					if v.v.id != t[i].Name {
-						return nil, newSemanticError("the first element of a choose relation must be a tuple of all the corresponding head variables (in the same order as in the head)", t[i].Pos)
+					for i, v := range rl.headVarMapping {
+						if v.v.id != t[i].Name {
+							return nil, newSemanticError("the first element of a choose relation must be a tuple of all the corresponding head variables (in the same order as in the head)", t[i].Pos)
+						}
 					}
 				}
 				rl.timeModel = timeModelAsync
