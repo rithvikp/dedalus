@@ -215,6 +215,18 @@ in2("1","2",L1,0).`,
 			},
 		},
 		{
+			msg: "first aggregation",
+			source: `
+out(first<a>,b,c,l,t) :- in1(a,b,l,t), in2(b,c,l,t)
+in1("1","2",L1,0).
+in1("3","2",L1,0).
+in2("2","3",L1,0).
+in2("1","2",L1,0).`,
+			facts: map[string][]*fact{
+				"out": {{[]string{"1", "2", "3"}, "L1", 0}},
+			},
+		},
+		{
 			msg: "negation",
 			source: `
 out1(a,b,l,t) :- in1(a,b,l,t), not in2(a,b,l,t)
@@ -258,6 +270,21 @@ in2("1","2",L1,0).`,
 			facts: map[string][]*fact{
 				"out1": {{[]string{"1", "2", "3"}, "L1", 0}, {[]string{"3", "2", "3"}, "L1", 0}},
 				"out2": {{[]string{"1", "2", "3"}, "L1", 0}, {[]string{"3", "2", "3"}, "L1", 0}},
+			},
+		},
+		{
+			msg: "auto-persistence",
+			source: `
+Out(a,b,c,l,t) :- in1(a,b,l,t), in2(b,c,l,t)
+in1("1","2",L1,0).
+in1("3","2",L1,0).
+in2("2","3",L1,0).
+in2("1","2",L1,0).`,
+			facts: map[string][]*fact{
+				"Out": {
+					{[]string{"1", "2", "3"}, "L1", 0}, {[]string{"3", "2", "3"}, "L1", 0},
+					{[]string{"1", "2", "3"}, "L1", 1}, {[]string{"3", "2", "3"}, "L1", 1},
+				},
 			},
 		},
 	}

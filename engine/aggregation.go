@@ -14,6 +14,7 @@ type aggregator string
 
 const (
 	aggregatorCount aggregator = "count"
+	aggregatorFirst aggregator = "first"
 	aggregatorMax   aggregator = "max"
 	aggregatorMin   aggregator = "min"
 	aggregatorSum   aggregator = "sum"
@@ -21,7 +22,7 @@ const (
 
 func (a aggregator) Valid() bool {
 	switch a {
-	case aggregatorCount, aggregatorMax, aggregatorMin, aggregatorSum:
+	case aggregatorCount, aggregatorFirst, aggregatorMax, aggregatorMin, aggregatorSum:
 		return true
 	default:
 		return false
@@ -31,11 +32,16 @@ func (a aggregator) Valid() bool {
 // It is (for now) assumed that the strings can be converted to the correct type for the aggregation
 // operation (only numbers for now). While this is not great, until a better type system is implemented,
 // it will suffice.
-func (a aggregator) Do(prev string, val string) string {
+//
+// Prev being nil means no previous value has been processed.
+func (a aggregator) Do(prevOptional *string, val string) string {
 	noPrev := false
-	if prev == "" {
+	prev := ""
+	if prevOptional == nil {
 		noPrev = true
 		prev = "0"
+	} else {
+		prev = *prevOptional
 	}
 
 	pi, pf, floatP, err := stringToNumber(prev)
@@ -56,6 +62,12 @@ func (a aggregator) Do(prev string, val string) string {
 		}
 
 		return strconv.Itoa(pi + 1)
+
+	case aggregatorFirst:
+		if noPrev {
+			return val
+		}
+		return prev
 
 	case aggregatorMax, aggregatorMin:
 		var next string
@@ -127,14 +139,14 @@ func aggregate(rl *rule, data [][]string) [][]string {
 		if pa, ok := pendingAggData[string(b)]; !ok {
 			pa := pendingAgg{nonAgg: nonAgg}
 			for _, ai := range aggIndices {
-				av := aggVar{i: ai.i, val: ai.agg.Do("", d[ai.i])}
+				av := aggVar{i: ai.i, val: ai.agg.Do(nil, d[ai.i])}
 				pa.agg = append(pa.agg, &av)
 			}
 			pendingAggData[string(b)] = &pa
 		} else {
 			for i, ai := range aggIndices {
 				av := pa.agg[i]
-				av.val = ai.agg.Do(av.val, d[ai.i])
+				av.val = ai.agg.Do(&av.val, d[ai.i])
 			}
 		}
 	}

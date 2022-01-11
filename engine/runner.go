@@ -15,8 +15,7 @@ import (
 	"github.com/rithvikp/dedalus/ast"
 )
 
-// TODO: validate for safe negation, user-defined r.r.t.'s,
-//	     auto-persisted relations
+// TODO: validate for safe negation, auto-persisted relations
 
 type SemanticError struct {
 	Position lexer.Position
@@ -61,8 +60,9 @@ type locTime struct {
 }
 
 type relation struct {
-	id       string
-	readOnly bool
+	id          string
+	readOnly    bool
+	autoPersist bool // Pascal-Cased relations are automatically persisted
 
 	bodyRules []*rule
 	indexes   []map[string]map[locTime][]*fact
@@ -214,9 +214,10 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 				lenOff = -2
 			}
 			r = &relation{
-				id:       id,
-				readOnly: readOnly,
-				indexes:  make([]map[string]map[locTime][]*fact, vars+lenOff),
+				id:          id,
+				readOnly:    readOnly,
+				autoPersist: strings.ToUpper(id[0:1]) == id[0:1],
+				indexes:     make([]map[string]map[locTime][]*fact, vars+lenOff),
 			}
 			for i := range r.indexes {
 				r.indexes[i] = map[string]map[locTime][]*fact{}
@@ -539,6 +540,19 @@ func (r *Runner) Step() {
 				if _, ok := inQueue[bodyRule.id]; !ok {
 					queue = append(queue)
 				}
+			}
+		}
+	}
+
+	// TODO: Optimize automatic persistence
+	for _, rel := range r.relations {
+		if !rel.autoPersist {
+			continue
+		}
+
+		for loc := range r.locations {
+			for _, f := range rel.all(loc, r.currentTimestamp) {
+				rel.push(f.data, f.location, f.timestamp+1)
 			}
 		}
 	}
