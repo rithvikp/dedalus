@@ -101,7 +101,7 @@ func (a aggregator) Do(prevOptional *string, val string) string {
 
 // This function operates on the output of join.
 // This is EXTREMELY hacky/non-clean code, but it works as a proof of concept.
-func aggregate(rl *rule, data [][]string) [][]string {
+func aggregate(rl *Rule, data [][]string) [][]string {
 	type aggIndex struct {
 		i   int
 		agg *aggregator

@@ -1,17 +1,39 @@
 package engine
 
-type relation struct {
+type Relation struct {
 	id          string
 	readOnly    bool
 	autoPersist bool // Pascal-Cased relations are automatically persisted
 
-	bodyRules []*rule
+	headRules []*Rule
+	bodyRules []*Rule
 	indexes   []map[string]map[locTime][]*fact
 	ltIndex   map[locTime]struct{}
 }
 
-func newRelation(id string, readOnly, autoPersist bool, indexCount int) *relation {
-	r := &relation{
+type Variable struct {
+	id    string
+	attrs map[string][]*Attribute
+}
+
+type Attribute struct {
+	relation *Relation
+	index    int
+}
+
+type fact struct {
+	data      []string
+	location  string
+	timestamp int
+}
+
+type locTime struct {
+	location  string
+	timestamp int
+}
+
+func newRelation(id string, readOnly, autoPersist bool, indexCount int) *Relation {
+	r := &Relation{
 		id:          id,
 		readOnly:    readOnly,
 		autoPersist: autoPersist,
@@ -25,11 +47,11 @@ func newRelation(id string, readOnly, autoPersist bool, indexCount int) *relatio
 	return r
 }
 
-func (r *relation) numAttrs() int {
+func (r *Relation) numAttrs() int {
 	return len(r.indexes)
 }
 
-func (r *relation) push(d []string, loc string, time int) bool {
+func (r *Relation) push(d []string, loc string, time int) bool {
 	if r.contains(d, loc, time) {
 		return false
 	}
@@ -56,7 +78,7 @@ func (r *relation) push(d []string, loc string, time int) bool {
 	return true
 }
 
-func (r *relation) contains(d []string, loc string, time int) bool {
+func (r *Relation) contains(d []string, loc string, time int) bool {
 	if len(r.indexes) != len(d) {
 		return false
 	}
@@ -89,7 +111,7 @@ func (r *relation) contains(d []string, loc string, time int) bool {
 	return false
 }
 
-func (r *relation) lookup(attrIndex int, attrVal string, loc string, time int) ([]*fact, bool) {
+func (r *Relation) lookup(attrIndex int, attrVal string, loc string, time int) ([]*fact, bool) {
 	lt := locTime{}
 	if !r.readOnly {
 		lt = locTime{loc, time}
@@ -108,7 +130,7 @@ func (r *relation) lookup(attrIndex int, attrVal string, loc string, time int) (
 }
 
 // TODO: Replace this with an iterator-like variant for efficiency
-func (r *relation) all(loc string, time int) []*fact {
+func (r *Relation) all(loc string, time int) []*fact {
 	var facts []*fact
 	if len(r.indexes) == 0 {
 		_, ok := r.lookup(-1, "", loc, time)
@@ -127,7 +149,7 @@ func (r *relation) all(loc string, time int) []*fact {
 }
 
 // TODO: Replace this with an iterator-like variant for efficiency
-func (r *relation) allAcrossSpaceTime() []*fact {
+func (r *Relation) allAcrossSpaceTime() []*fact {
 	var facts []*fact
 	if len(r.indexes) == 0 {
 		for lt := range r.ltIndex {

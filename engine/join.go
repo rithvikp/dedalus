@@ -5,14 +5,14 @@ import (
 )
 
 type factNode struct {
-	lockedVars map[*variable]string
+	lockedVars map[*Variable]string
 }
 
-func join(rl *rule, loc string, time int) [][]string {
+func join(rl *Rule, loc string, time int) [][]string {
 	var fringe []*factNode
 	rel := rl.body[0]
 	for _, f := range rel.all(loc, time) {
-		fn := &factNode{lockedVars: map[*variable]string{
+		fn := &factNode{lockedVars: map[*Variable]string{
 			rl.bodyLocVar:  loc,
 			rl.bodyTimeVar: strconv.Itoa(time),
 		}}
@@ -40,7 +40,7 @@ func join(rl *rule, loc string, time int) [][]string {
 		}
 	}
 
-	addChildren := func(node *factNode, rel *relation) []*factNode {
+	addChildren := func(node *factNode, rel *Relation) []*factNode {
 		var workingSet []*fact
 		first := true
 		for _, v := range rl.vars[rel.id] {
@@ -90,7 +90,7 @@ func join(rl *rule, loc string, time int) [][]string {
 
 		var children []*factNode
 		for _, f := range workingSet {
-			fn := &factNode{lockedVars: map[*variable]string{}}
+			fn := &factNode{lockedVars: map[*Variable]string{}}
 			for k, v := range node.lockedVars {
 				fn.lockedVars[k] = v
 			}
@@ -122,7 +122,7 @@ func join(rl *rule, loc string, time int) [][]string {
 	data := make([][]string, 0, len(fringe))
 	for _, fn := range fringe {
 		d := make([]string, rl.head.numAttrs()+1)
-		value := func(v *variable) string {
+		value := func(v *Variable) string {
 			if v == rl.bodyLocVar {
 				return loc
 			} else if v == rl.bodyTimeVar {
@@ -153,11 +153,11 @@ func join(rl *rule, loc string, time int) [][]string {
 		}
 
 		for _, a := range rl.assignments {
-			fn.lockedVars[a.v] = a.e.Eval(value)
+			fn.lockedVars[a.v] = a.e.eval(value)
 		}
 
 		for _, cond := range rl.conditions {
-			if !cond.Eval(value) {
+			if !cond.eval(value) {
 				consistent = false
 				break
 			}
