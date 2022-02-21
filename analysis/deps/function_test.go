@@ -78,7 +78,7 @@ func TestFunctionMergeDomain(t *testing.T) {
 	}
 }
 
-func testFuncEqual(t *testing.T) {
+func TestFuncEqual(t *testing.T) {
 	tests := []struct {
 		msg   string
 		a     Function
@@ -107,7 +107,7 @@ func testFuncEqual(t *testing.T) {
 			msg:   "two different add functions",
 			a:     ExpressionFunc(AddExp(AddExp(number(3), number(2)), IdentityExp(1)), 2),
 			b:     ExpressionFunc(AddExp(IdentityExp(1), number(3)), 2),
-			equal: true,
+			equal: false,
 		},
 		{
 			msg:   "different domain sizes",
@@ -120,7 +120,7 @@ func testFuncEqual(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.msg, func(t *testing.T) {
-			if !funcEqual(tt.a, tt.b) {
+			if funcEqual(tt.a, tt.b) != tt.equal {
 				// TODO: Add a string representation of the functions
 				t.Errorf("expected functions to be equal")
 			}

@@ -1,7 +1,6 @@
 package deps
 
 import (
-	"fmt"
 	"sort"
 )
 
@@ -26,7 +25,6 @@ func (f *Function) Eval(x []int) int {
 			input[j] = x[i]
 		}
 	}
-	fmt.Println(input, f.domainToInput)
 	return f.exp.Eval(input)
 }
 
