@@ -13,7 +13,7 @@ type Relation struct {
 
 type Variable struct {
 	id    string
-	attrs map[string][]*Attribute
+	attrs map[string][]Attribute
 }
 
 type Attribute struct {
@@ -30,6 +30,14 @@ type fact struct {
 type locTime struct {
 	location  string
 	timestamp int
+}
+
+func (r *Relation) Attrs() []Attribute {
+	attrs := make([]Attribute, 0, r.numAttrs())
+	for i := 0; i < len(attrs); i++ {
+		attrs = append(attrs, Attribute{relation: r, index: i})
+	}
+	return attrs
 }
 
 func newRelation(id string, readOnly, autoPersist bool, indexCount int) *Relation {
