@@ -2,21 +2,47 @@ package deps
 
 import (
 	"sort"
+
+	"golang.org/x/exp/slices"
 )
 
 // TODO: Some of this functionality is duplicated by the runtime's internal expression system.
 
+type inputTransformation struct {
+	inputIndices []int
+	f            Function
+}
+
 type Function struct {
 	DomainDim            int
 	CodomainDim          int
-	domainToInput        []Set[int]       // Map from domain indices to expression input indices (var-attr substitutions).
-	inputTransformations map[int]Function // Map from input indices to corresponding functions that should be applied before evaluating the function.
+	domainToInput        []Set[int]                  // Map from domain indices to expression input indices (var-attr substitutions).
+	inputTransformations map[int]inputTransformation // Map from input indices to corresponding functions that should be applied before evaluating the function.
 	inputDim             int
 	exp                  Expression
 }
 
 type Expression interface {
 	Eval(input []int) int
+}
+
+func (f *Function) Clone() Function {
+	g := *f
+
+	g.domainToInput = make([]Set[int], len(f.domainToInput))
+	for i, s := range f.domainToInput {
+		g.domainToInput[i] = s.Clone()
+	}
+
+	g.inputTransformations = map[int]inputTransformation{}
+	for i, it := range f.inputTransformations {
+		g.inputTransformations[i] = inputTransformation{
+			inputIndices: slices.Clone(it.inputIndices),
+			f:            it.f.Clone(),
+		}
+	}
+
+	return g
 }
 
 func (f *Function) Eval(x []int) int {
@@ -26,6 +52,21 @@ func (f *Function) Eval(x []int) int {
 			input[j] = x[i]
 		}
 	}
+
+	for i := range input {
+		it, ok := f.inputTransformations[i]
+		if !ok {
+			continue
+		}
+
+		transformIn := make([]int, len(it.inputIndices))
+		for j, k := range it.inputIndices {
+			// TODO: Handle dependent transformations
+			transformIn[j] = input[k]
+		}
+		input[i] = it.f.Eval(transformIn)
+	}
+
 	return f.exp.Eval(input)
 }
 
@@ -61,26 +102,42 @@ func (f *Function) MergeDomain(indices []int) {
 	f.domainToInput = dToI
 }
 
-func (f *Function) SubstituteFunction(substIndex int, expInputIndices []int, exp Expression) {
+func (f *Function) FunctionSubstitution(substIndex int, domIndices []int, g Function) {
+	f.DomainDim -= 1
 
+	inputIndices := make([]int, len(domIndices))
+	for i, index := range domIndices {
+		inputIndices[i] = f.domainToInput[index].Elems()[0]
+	}
+
+	for i := range f.domainToInput[substIndex] {
+		if _, ok := f.inputTransformations[i]; ok {
+			// TODO: handle composition
+			panic("FD composition is not currently handled")
+		} else {
+			f.inputTransformations[i] = inputTransformation{inputIndices: inputIndices, f: g}
+		}
+	}
+	f.domainToInput = slices.Delete(f.domainToInput, substIndex, substIndex+1)
 }
 
 func IdentityFunc() Function {
-	return ExpressionFunc(IdentityExp(0), 1)
+	return ExprFunc(IdentityExp(0), 1)
 }
 
-func ExpressionFunc(exp Expression, domainDim int) Function {
+func ExprFunc(exp Expression, domainDim int) Function {
 	dToI := make([]Set[int], domainDim)
 	for i := 0; i < domainDim; i++ {
 		dToI[i] = Set[int]{i: true}
 	}
 
 	return Function{
-		DomainDim:     domainDim,
-		CodomainDim:   1,
-		domainToInput: dToI,
-		inputDim:      domainDim,
-		exp:           exp,
+		DomainDim:            domainDim,
+		CodomainDim:          1,
+		domainToInput:        dToI,
+		inputTransformations: map[int]inputTransformation{},
+		inputDim:             domainDim,
+		exp:                  exp,
 	}
 }
 

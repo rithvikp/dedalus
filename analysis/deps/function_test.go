@@ -17,7 +17,7 @@ func TestFunctionEval(t *testing.T) {
 		},
 		{
 			msg:     "add function",
-			f:       ExpressionFunc(AddExp(IdentityExp(1), IdentityExp(3)), 5),
+			f:       ExprFunc(AddExp(IdentityExp(1), IdentityExp(3)), 5),
 			inputs:  [][]int{{1, 2, 3, 4, 5}, {0, -1, -5, -6, 10}},
 			outputs: []int{6, -7},
 		},
@@ -47,14 +47,14 @@ func TestFunctionMergeDomain(t *testing.T) {
 	}{
 		{
 			msg:          "function that adds input elements",
-			f:            ExpressionFunc(AddExp(IdentityExp(0), IdentityExp(1)), 2),
+			f:            ExprFunc(AddExp(IdentityExp(0), IdentityExp(1)), 2),
 			mergeIndices: [][]int{{0, 1}},
 			inputs:       [][]int{{1}, {2}},
 			outputs:      []int{2, 4},
 		},
 		{
 			msg:          "function that adds input elements with multiple merges",
-			f:            ExpressionFunc(AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(3)), 5),
+			f:            ExprFunc(AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(3)), 5),
 			mergeIndices: [][]int{{0, 1}, {1, 3}},
 			inputs:       [][]int{{1, 2, 3}, {2, 5, 6}},
 			outputs:      []int{5, 10},
@@ -93,26 +93,26 @@ func TestFuncEqual(t *testing.T) {
 		},
 		{
 			msg:   "two functions that return different elements of the input",
-			a:     ExpressionFunc(IdentityExp(1), 2),
-			b:     ExpressionFunc(IdentityExp(0), 0),
+			a:     ExprFunc(IdentityExp(1), 2),
+			b:     ExprFunc(IdentityExp(0), 0),
 			equal: false,
 		},
 		{
 			msg:   "two equivalent add functions (but with different exp structures)",
-			a:     ExpressionFunc(AddExp(AddExp(number(1), number(2)), IdentityExp(1)), 2),
-			b:     ExpressionFunc(AddExp(IdentityExp(1), number(3)), 2),
+			a:     ExprFunc(AddExp(AddExp(number(1), number(2)), IdentityExp(1)), 2),
+			b:     ExprFunc(AddExp(IdentityExp(1), number(3)), 2),
 			equal: true,
 		},
 		{
 			msg:   "two different add functions",
-			a:     ExpressionFunc(AddExp(AddExp(number(3), number(2)), IdentityExp(1)), 2),
-			b:     ExpressionFunc(AddExp(IdentityExp(1), number(3)), 2),
+			a:     ExprFunc(AddExp(AddExp(number(3), number(2)), IdentityExp(1)), 2),
+			b:     ExprFunc(AddExp(IdentityExp(1), number(3)), 2),
 			equal: false,
 		},
 		{
 			msg:   "different domain sizes",
-			a:     ExpressionFunc(IdentityExp(0), 2),
-			b:     ExpressionFunc(IdentityExp(2), 3),
+			a:     ExprFunc(IdentityExp(0), 2),
+			b:     ExprFunc(IdentityExp(2), 3),
 			equal: false,
 		},
 	}

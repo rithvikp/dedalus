@@ -13,6 +13,7 @@ import (
 
 	"github.com/alecthomas/participle/v2/lexer"
 	"github.com/rithvikp/dedalus/ast"
+	"golang.org/x/exp/slices"
 )
 
 // TODO: validate for safe negation, auto-persisted relations
@@ -97,6 +98,10 @@ func (r *Rule) Body() []*Relation {
 	body := make([]*Relation, len(r.body))
 	copy(body, r.body)
 	return body
+}
+
+func (r *Rule) IsNegated(rel *Relation) bool {
+	return slices.Contains(r.negatedBody, rel)
 }
 
 func (r *Rule) Head() *Relation {

@@ -86,6 +86,16 @@ func (s Set[K]) Add(elems ...K) {
 	}
 }
 
+func (s Set[K]) Clone() Set[K] {
+	c := Set[K]{}
+	c.Union(s)
+	return c
+}
+
+func (s Set[K]) Elems() []K {
+	return maps.Keys(s)
+}
+
 type FD struct {
 	Dom   []engine.Attribute
 	Codom engine.Attribute
@@ -107,9 +117,9 @@ type varFD struct {
 }
 
 func varFDEqual(a, b *varFD) bool {
-	equal := !reflect.DeepEqual(a.Dom, b.Dom)
-	equal = equal && a.Codom != b.Codom
-	equal = equal && !funcEqual(a.f, b.f)
+	equal := slices.Equal(a.Dom, b.Dom)
+	equal = equal && a.Codom == b.Codom
+	equal = equal && funcEqual(a.f, b.f)
 
 	return equal
 }
@@ -189,7 +199,7 @@ func HeadFDs(rl *engine.Rule, existingFDs map[*engine.Relation]SetFunc[*FD]) Set
 }
 
 func DepPlus(rl *engine.Rule, existingFDs map[*engine.Relation]SetFunc[*FD]) SetFunc[*FD] {
-	varDeps := Dep(rl, existingFDs)
+	varDeps := Dep(rl, existingFDs, false)
 	// QUESTION: Is adding new fds to a new set ok?
 	newDeps := SetFunc[*varFD]{equal: varFDEqual}
 	newDeps.Union(varDeps)
@@ -203,7 +213,11 @@ func DepPlus(rl *engine.Rule, existingFDs map[*engine.Relation]SetFunc[*FD]) Set
 			for _, h := range varDeps.Elems() {
 				domH := h.Dom
 				if slices.Contains(domH, codomG) {
-
+					newVFD := funcSub(g, h)
+					if !newDeps.Contains(newVFD) {
+						fixpoint = false
+					}
+					newDeps.Add(newVFD)
 				}
 			}
 		}
@@ -212,16 +226,22 @@ func DepPlus(rl *engine.Rule, existingFDs map[*engine.Relation]SetFunc[*FD]) Set
 	// Multi-dimensional codomain?
 
 	attrDeps := SetFunc[*FD]{equal: fdEqual}
+	for _, g := range newDeps.Elems() {
+		_ = g
+	}
 
 	return attrDeps
 }
 
-func Dep(rl *engine.Rule, existingFDs map[*engine.Relation]SetFunc[*FD]) SetFunc[*varFD] {
+func Dep(rl *engine.Rule, existingFDs map[*engine.Relation]SetFunc[*FD], includeNeg bool) SetFunc[*varFD] {
 	basicDeps := SetFunc[*FD]{equal: fdEqual}
 
 	relations := rl.Body()
 	relations = append(relations, rl.Head())
 	for _, rel := range relations {
+		if !includeNeg && rl.IsNegated(rel) {
+			continue
+		}
 		if false /* is EDB */ {
 		} else if _, ok := existingFDs[rel]; ok {
 			basicDeps.Union(existingFDs[rel])
@@ -265,6 +285,52 @@ func Dep(rl *engine.Rule, existingFDs map[*engine.Relation]SetFunc[*FD]) SetFunc
 	}
 
 	return varDeps
+}
+
+func funcSub(sub *varFD, vfd *varFD) *varFD {
+	newVFD := varFD{
+		Codom: vfd.Codom,
+		f:     vfd.f.Clone(),
+	}
+
+	subVars := Set[*engine.Variable]{}
+	subVars.Add(sub.Dom...)
+	subDomIndices := make([]int, 0, len(sub.Dom))
+	for i, v := range vfd.Dom {
+		if subVars[v] {
+			subDomIndices = append(subDomIndices, i)
+		}
+	}
+
+	// TODO: Add to domain of new function as necessary?
+	found := false
+	for i, v := range vfd.Dom {
+		// This will only be run ONCE as a variable can only appear one time in the domain of a var FD.
+		if v == sub.Codom {
+			if found {
+				panic("The same variable cannot appear multiple times in the same function")
+			}
+			found = true
+			newVFD.f.FunctionSubstitution(i, subDomIndices, sub.f)
+
+			// The function domain has shrunk, so adjust indices accordingly
+			// newSubDomIndices := make([]int, len(sub.Dom))
+			// for j, index := range subDomIndices {
+			// 	if index > i {
+			// 		newSubDomIndices[j] = index - 1
+			// 	} else if index < i {
+			// 		newSubDomIndices[j] = index
+			// 	} else {
+			// 		panic("A function cannot have the same variable in its domain and codomain")
+			// 	}
+			// 	subDomIndices = newSubDomIndices
+			// }
+		} else {
+			newVFD.Dom = append(newVFD.Dom, v)
+		}
+	}
+
+	return &newVFD
 }
 
 func varSub(vafd *varOrAttrFD, v *engine.Variable, a engine.Attribute) {
