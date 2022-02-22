@@ -7,11 +7,12 @@ import (
 // TODO: Some of this functionality is duplicated by the runtime's internal expression system.
 
 type Function struct {
-	DomainDim     int
-	CodomainDim   int
-	domainToInput []Set[int] // Map from domain indices to expression input indices (var-attr substitutions).
-	inputDim      int
-	exp           Expression
+	DomainDim            int
+	CodomainDim          int
+	domainToInput        []Set[int]       // Map from domain indices to expression input indices (var-attr substitutions).
+	inputTransformations map[int]Function // Map from input indices to corresponding functions that should be applied before evaluating the function.
+	inputDim             int
+	exp                  Expression
 }
 
 type Expression interface {
@@ -58,6 +59,10 @@ func (f *Function) MergeDomain(indices []int) {
 		}
 	}
 	f.domainToInput = dToI
+}
+
+func (f *Function) SubstituteFunction(substIndex int, expInputIndices []int, exp Expression) {
+
 }
 
 func IdentityFunc() Function {

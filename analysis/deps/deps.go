@@ -4,6 +4,8 @@ import (
 	"reflect"
 
 	"github.com/rithvikp/dedalus/engine"
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 )
 
 type SetFunc[K any] struct {
@@ -11,7 +13,49 @@ type SetFunc[K any] struct {
 	elems []K
 }
 
+func (s SetFunc[K]) Contains(k K) bool {
+	for _, e := range s.elems {
+		if s.equal(e, k) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (s SetFunc[K]) Union(other SetFunc[K]) {
+	for _, o := range other.Elems() {
+		if !s.Contains(o) {
+			s.elems = append(s.elems, o)
+		}
+	}
+}
+
+func (s SetFunc[K]) Intersect(other SetFunc[K]) {
+	var newElems []K
+	for _, e := range s.elems {
+		if other.Contains(e) {
+			newElems = append(newElems, e)
+		}
+	}
+	s.elems = newElems
+}
+
+func (s SetFunc[K]) Add(elems ...K) {
+	s.Union(SetFunc[K]{elems: elems})
+}
+
+func (s SetFunc[K]) Clone() SetFunc[K] {
+	c := SetFunc[K]{equal: s.equal}
+	c.Union(s)
+	return c
+}
+
+func (s SetFunc[K]) Elems() []K {
+	return s.elems
+}
+
+func (s SetFunc[K]) Equal(other SetFunc[K]) bool {
 	for _, o := range other.Elems() {
 		found := false
 		for _, e := range s.elems {
@@ -20,19 +64,12 @@ func (s SetFunc[K]) Union(other SetFunc[K]) {
 				break
 			}
 		}
-
 		if !found {
-			s.elems = append(s.elems, o)
+			return false
 		}
 	}
-}
 
-func (s SetFunc[K]) Add(elems ...K) {
-	s.Union(SetFunc[K]{elems: elems})
-}
-
-func (s SetFunc[K]) Elems() []K {
-	return s.elems
+	return true
 }
 
 type Set[K comparable] map[K]bool
@@ -92,15 +129,102 @@ func Analyze(s *engine.State) {
 
 }
 
+func FDs(s *engine.State) map[*engine.Relation]SetFunc[*FD] {
+	fds := map[*engine.Relation]SetFunc[*FD]{}
+	oldFDs := maps.Clone(fds)
+	first := true
+
+	for first || !maps.EqualFunc(fds, oldFDs, func(a, b SetFunc[*FD]) bool { return a.Equal(b) }) {
+		first = false
+		maps.Clear(oldFDs)
+		for rel, s := range fds {
+			oldFDs[rel] = s.Clone()
+		}
+
+		for _, rl := range s.Rules() {
+			head := rl.Head()
+			fds[head].Union(HeadFDs(rl, fds))
+		}
+	}
+
+	first = true
+	for first || !maps.EqualFunc(fds, oldFDs, func(a, b SetFunc[*FD]) bool { return a.Equal(b) }) {
+		first = false
+		maps.Clear(oldFDs)
+		for rel, s := range fds {
+			oldFDs[rel] = s.Clone()
+		}
+
+		for _, rl := range s.Rules() {
+			head := rl.Head()
+			fdsNoR := maps.Clone(fds) // Note that this is a shallow copy
+			fdsNoR[head] = SetFunc[*FD]{equal: fdEqual}
+
+			fds[head].Intersect(HeadFDs(rl, fdsNoR))
+		}
+	}
+
+	return fds
+}
+
+func HeadFDs(rl *engine.Rule, existingFDs map[*engine.Relation]SetFunc[*FD]) SetFunc[*FD] {
+	rDeps := SetFunc[*FD]{equal: fdEqual}
+	rAttrs := Set[engine.Attribute]{}
+	rAttrs.Add(rl.Head().Attrs()...)
+
+	for _, fd := range DepPlus(rl, existingFDs).Elems() {
+		subset := true
+		for _, a := range fd.Dom {
+			if !rAttrs[a] {
+				subset = false
+				break
+			}
+		}
+		if subset && rAttrs[fd.Codom] {
+			rDeps.Add(fd)
+		}
+	}
+
+	return rDeps
+}
+
+func DepPlus(rl *engine.Rule, existingFDs map[*engine.Relation]SetFunc[*FD]) SetFunc[*FD] {
+	varDeps := Dep(rl, existingFDs)
+	// QUESTION: Is adding new fds to a new set ok?
+	newDeps := SetFunc[*varFD]{equal: varFDEqual}
+	newDeps.Union(varDeps)
+
+	// TODO
+	fixpoint := false
+	for !fixpoint {
+		fixpoint = true
+		for _, g := range varDeps.Elems() {
+			codomG := g.Codom
+			for _, h := range varDeps.Elems() {
+				domH := h.Dom
+				if slices.Contains(domH, codomG) {
+
+				}
+			}
+		}
+	}
+
+	// Multi-dimensional codomain?
+
+	attrDeps := SetFunc[*FD]{equal: fdEqual}
+
+	return attrDeps
+}
+
 func Dep(rl *engine.Rule, existingFDs map[*engine.Relation]SetFunc[*FD]) SetFunc[*varFD] {
-	basicDep := SetFunc[*FD]{equal: fdEqual}
+	basicDeps := SetFunc[*FD]{equal: fdEqual}
 
 	relations := rl.Body()
 	relations = append(relations, rl.Head())
 	for _, rel := range relations {
 		if false /* is EDB */ {
 		} else if _, ok := existingFDs[rel]; ok {
-			basicDep.Union(existingFDs[rel])
+			basicDeps.Union(existingFDs[rel])
 		}
 
 		for _, a := range rel.Attrs() {
@@ -109,12 +233,12 @@ func Dep(rl *engine.Rule, existingFDs map[*engine.Relation]SetFunc[*FD]) SetFunc
 				Codom: a,
 				f:     IdentityFunc(),
 			}
-			basicDep.Add(&fd)
+			basicDeps.Add(&fd)
 		}
 	}
 
-	varDep := SetFunc[*varFD]{equal: varFDEqual}
-	for _, fd := range basicDep.Elems() {
+	varDeps := SetFunc[*varFD]{equal: varFDEqual}
+	for _, fd := range basicDeps.Elems() {
 		attrs := Set[engine.Attribute]{}
 		attrs.Add(fd.Codom)
 		attrs.Add(fd.Dom...)
@@ -137,10 +261,10 @@ func Dep(rl *engine.Rule, existingFDs map[*engine.Relation]SetFunc[*FD]) SetFunc
 			}
 		}
 
-		varDep.Add(varOrAttrFDToVarFD(&g))
+		varDeps.Add(varOrAttrFDToVarFD(&g))
 	}
 
-	return varDep
+	return varDeps
 }
 
 func varSub(vafd *varOrAttrFD, v *engine.Variable, a engine.Attribute) {
@@ -148,12 +272,25 @@ func varSub(vafd *varOrAttrFD, v *engine.Variable, a engine.Attribute) {
 		vafd.Codom.Var = v
 		vafd.Codom.Attr = nil
 	}
+
+	var mergeIndices []int
+	first := true
+	newDom := make([]varOrAttr, 0, len(vafd.Dom))
 	for i := range vafd.Dom {
 		if vafd.Dom[i].Attr != nil && *vafd.Dom[i].Attr == a {
-			vafd.Dom[i].Var = v
-			vafd.Dom[i].Attr = nil
+			if first {
+				vafd.Dom[i].Var = v
+				vafd.Dom[i].Attr = nil
+				newDom = append(newDom, vafd.Dom[i])
+				first = false
+			}
+			mergeIndices = append(mergeIndices, i)
+		} else {
+			newDom = append(newDom, vafd.Dom[i])
 		}
 	}
+	vafd.f.MergeDomain(mergeIndices)
+	vafd.Dom = newDom
 }
 
 func varOrAttrFDToVarFD(vafd *varOrAttrFD) *varFD {

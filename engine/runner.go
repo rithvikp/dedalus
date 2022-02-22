@@ -85,6 +85,10 @@ type State struct {
 	locations        map[string]struct{}
 }
 
+func (s *State) Rules() []*Rule {
+	return s.rules
+}
+
 type Runner struct {
 	*State
 }

@@ -121,7 +121,7 @@ func TestFuncEqual(t *testing.T) {
 		tt := tt
 		t.Run(tt.msg, func(t *testing.T) {
 			if funcEqual(tt.a, tt.b) != tt.equal {
-				// TODO: Add a string representation of the functions
+				// TODO: Add a string representation of the functions to the error message
 				t.Errorf("expected functions to be equal")
 			}
 		})
