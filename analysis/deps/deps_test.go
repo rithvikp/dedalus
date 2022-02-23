@@ -1,6 +1,7 @@
 package deps
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -23,8 +24,67 @@ func stateFromProgram(t *testing.T, program string) *engine.State {
 	return s
 }
 
-func TestDep(t *testing.T) {
+var p1 = `add("1", "2", "3").
+out(a,b,c,l,t) :- in1(a,b,c,l,t)
+`
+var p2 = `add("1", "2", "3").
+out(a,b,c,l,t) :- in1(a,b,c,l,t), add(a,b,c)
+`
+var p3 = `add("1", "2", "3").
+out(a,b,c,c,l,t) :- in1(a,b,c,l,t), add(a,b,c)
+`
+var p4 = `add("1", "2", "3").
+out(a,b,c,c,l,t) :- in1(a,b,c,l,t), add(a,b,c)
+out(a,b,c,d,l,t) :- in2(a,b,c,d,l,t), add(a,b,c)
+`
+var p = p1
 
+// TODO: These test functions currently just output to stdout for manual inspection. This will be changed soon.
+func TestFDs(t *testing.T) {
+	s := stateFromProgram(t, p)
+
+	fds := FDs(s)
+	for rel, deps := range fds {
+		fmt.Printf("\n==============%s==============\n", rel.ID())
+		for _, dep := range deps.Elems() {
+			fmt.Printf("\n%v\n\n", dep)
+		}
+		fmt.Println("Num FDs:", len(deps.Elems()))
+		fmt.Printf("\n============================\n")
+	}
+}
+
+func TestHeadFDs(t *testing.T) {
+	s := stateFromProgram(t, p)
+
+	existingFDs := map[*engine.Relation]*SetFunc[*FD]{}
+	fds := HeadFDs(s.Rules()[0], existingFDs)
+	for _, dep := range fds.Elems() {
+		fmt.Printf("\n%v\n\n", dep)
+	}
+	fmt.Println("Num FDs:", len(fds.Elems()))
+}
+
+func TestDepClosure(t *testing.T) {
+	s := stateFromProgram(t, p)
+
+	existingFDs := map[*engine.Relation]*SetFunc[*FD]{}
+	fds := DepClosure(s.Rules()[0], existingFDs)
+	for _, dep := range fds.Elems() {
+		fmt.Printf("\n%v\n\n", dep)
+	}
+	fmt.Println("Num FDs:", len(fds.Elems()))
+}
+
+func TestDep(t *testing.T) {
+	s := stateFromProgram(t, p)
+
+	existingFDs := map[*engine.Relation]*SetFunc[*FD]{}
+	vFDs := Dep(s.Rules()[0], existingFDs, false)
+	for _, dep := range vFDs.Elems() {
+		fmt.Printf("\n%v\n\n", dep)
+	}
+	fmt.Println("Num FDs:", len(vFDs.Elems()))
 }
 
 func TestFuncSub(t *testing.T) {

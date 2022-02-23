@@ -1,5 +1,7 @@
 package engine
 
+import "fmt"
+
 type Relation struct {
 	id          string
 	readOnly    bool
@@ -16,9 +18,17 @@ type Variable struct {
 	attrs map[string][]Attribute
 }
 
+func (v Variable) String() string {
+	return v.id
+}
+
 type Attribute struct {
 	relation *Relation
 	index    int
+}
+
+func (a Attribute) String() string {
+	return fmt.Sprintf("Attr(%s,%d)", a.relation.id, a.index)
 }
 
 type fact struct {
@@ -33,11 +43,19 @@ type locTime struct {
 }
 
 func (r *Relation) Attrs() []Attribute {
-	attrs := make([]Attribute, 0, r.numAttrs())
+	attrs := make([]Attribute, r.numAttrs())
 	for i := 0; i < len(attrs); i++ {
-		attrs = append(attrs, Attribute{relation: r, index: i})
+		attrs[i] = Attribute{relation: r, index: i}
 	}
 	return attrs
+}
+
+func (r *Relation) ID() string {
+	return r.id
+}
+
+func (r *Relation) IsEDB() bool {
+	return r.readOnly || r.id == "add" // FIXME
 }
 
 func newRelation(id string, readOnly, autoPersist bool, indexCount int) *Relation {

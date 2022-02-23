@@ -109,7 +109,19 @@ func (r *Rule) Head() *Relation {
 }
 
 func (r *Rule) VarOfAttr(a Attribute) *Variable {
-	return r.vars[a.relation.id][a.index]
+	if vars, ok := r.vars[a.relation.id]; ok {
+		return vars[a.index]
+	}
+
+	return r.headVarMapping[a.index].v
+}
+
+func (v *Variable) Attrs() []Attribute {
+	var attrs []Attribute
+	for _, as := range v.attrs {
+		attrs = append(attrs, as...)
+	}
+	return attrs
 }
 
 func New(p *ast.Program) (*State, error) {
@@ -234,24 +246,6 @@ func New(p *ast.Program) (*State, error) {
 
 		headVars := map[string][]int{}
 		aggregatedIndices := map[int]aggregator{}
-		for j, v := range astHeadVars {
-			if j >= len(astHeadVars)-2 {
-				break
-			}
-
-			headVars[v.Variable.Name] = append(headVars[v.Variable.Name], j)
-			if v.Aggregator == nil {
-				continue
-			}
-
-			rl.hasAggregation = true
-			agg := aggregator(*v.Aggregator)
-			if !agg.Valid() {
-				return nil, newSemanticError(fmt.Sprintf("invalid aggregation function %q", agg), v.Pos)
-			}
-			aggregatedIndices[j] = agg
-		}
-
 		addToHeadVarMapping := func(v *Variable) {
 			if indices, ok := headVars[v.id]; ok {
 				for _, k := range indices {
@@ -262,6 +256,50 @@ func New(p *ast.Program) (*State, error) {
 					rl.headVarMapping[k] = hv
 				}
 			}
+		}
+
+		addVariable := func(rel *Relation, vName string, a Attribute, addToHeadMapping bool) {
+			var v *Variable
+			var ok bool
+			if v, ok = vars[vName]; ok {
+				v.attrs[rel.id] = append(v.attrs[rel.id], a)
+			} else {
+				v = &Variable{
+					id:    vName,
+					attrs: map[string][]Attribute{rel.id: {a}},
+				}
+				if v.id != "_" {
+					vars[v.id] = v
+				}
+			}
+
+			if addToHeadMapping {
+				addToHeadVarMapping(v)
+			}
+			rl.vars[rel.id] = append(rl.vars[rel.id], v)
+		}
+
+		for j, astVar := range astHeadVars {
+			if j >= len(astHeadVars)-2 {
+				break
+			}
+
+			headVars[astVar.Variable.Name] = append(headVars[astVar.Variable.Name], j)
+			if astVar.Aggregator != nil {
+				rl.hasAggregation = true
+				agg := aggregator(*astVar.Aggregator)
+				if !agg.Valid() {
+					return nil, newSemanticError(fmt.Sprintf("invalid aggregation function %q", agg), astVar.Pos)
+				}
+				aggregatedIndices[j] = agg
+			}
+
+			rel := rl.head
+			a := Attribute{
+				index:    j,
+				relation: rel,
+			}
+			addVariable(rel, astVar.Variable.Name, a, false)
 		}
 
 		var lateAtoms []*ast.Atom
@@ -334,23 +372,7 @@ func New(p *ast.Program) (*State, error) {
 					index:    j,
 					relation: rel,
 				}
-
-				var v *Variable
-				var ok bool
-				if v, ok = vars[astVar.Name]; ok {
-					v.attrs[rel.id] = append(v.attrs[rel.id], a)
-				} else {
-					v = &Variable{
-						id:    astVar.Name,
-						attrs: map[string][]Attribute{rel.id: {a}},
-					}
-					if v.id != "_" {
-						vars[v.id] = v
-					}
-				}
-				addToHeadVarMapping(v)
-
-				rl.vars[astAtom.Name] = append(rl.vars[astAtom.Name], v)
+				addVariable(rel, astVar.Name, a, true)
 			}
 		}
 
@@ -361,9 +383,14 @@ func New(p *ast.Program) (*State, error) {
 			parseFirstTerm := func(astE *ast.Expression) (expression, error) {
 				if astE.Var != nil {
 					v, ok := vars[astE.Var.Name]
-					if !ok && (!canBeAssignment || astE.Expr != nil) {
+					if !ok {
+						return nil, newSemanticError(fmt.Sprintf("all variables must appear in at least one atom: %q does not", astE.Var.Name), astE.Var.Pos)
+					}
+					_, inHead := v.attrs[rl.head.id]
+					onlyInHead := len(v.attrs) == 1 && inHead
+					if onlyInHead && (!canBeAssignment || astE.Expr != nil) {
 						return nil, newSemanticError(fmt.Sprintf("all variables in conditions must first show up in a positive atom or an assignment: %q does not", astE.Var.Name), astE.Var.Pos)
-					} else if !ok && canBeAssignment && astE.Expr == nil {
+					} else if onlyInHead && canBeAssignment && astE.Expr == nil {
 						v = &Variable{id: astE.Var.Name}
 						addToHeadVarMapping(v)
 						vars[v.id] = v

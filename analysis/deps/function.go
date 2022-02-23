@@ -1,6 +1,7 @@
 package deps
 
 import (
+	"fmt"
 	"sort"
 
 	"golang.org/x/exp/slices"
@@ -24,6 +25,10 @@ type Function struct {
 
 type Expression interface {
 	Eval(input []int) int
+}
+
+func (f Function) String() string {
+	return fmt.Sprintf("{ Dom: %d, Codom: %d, Exp: %+v }", f.DomainDim, f.CodomainDim, f.exp)
 }
 
 func (f *Function) Clone() Function {
@@ -211,6 +216,14 @@ func AddExp(right, left Expression) Expression {
 		e1: right,
 		e2: left,
 		op: "+",
+	}
+}
+
+func SubExp(right, left Expression) Expression {
+	return binOp{
+		e1: right,
+		e2: left,
+		op: "-",
 	}
 }
 
