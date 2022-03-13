@@ -37,7 +37,7 @@ var p4 = `add("1", "2", "3").
 out(a,b,c,c,l,t) :- in1(a,b,c,l,t), add(a,b,c)
 out(a,b,c,d,l,t) :- in2(a,b,c,d,l,t), add(a,b,c)
 `
-var p = p1
+var p = p4
 
 // TODO: These test functions currently just output to stdout for manual inspection. This will be changed soon.
 func TestFDs(t *testing.T) {

@@ -52,9 +52,16 @@ type BodyTerm struct {
 type Atom struct {
 	Pos lexer.Position
 
-	Negated   bool       `parser:"@'not'?"`
-	Name      string     `parser:"@Ident"`
-	Variables []Variable `parser:"'(' @@ (',' @@)* ')'"`
+	Negated bool       `parser:"@'not'?"`
+	Name    string     `parser:"@Ident"`
+	Terms   []AtomTerm `parser:"'(' @@ (',' @@)* ')'"`
+}
+
+type AtomTerm struct {
+	Pos lexer.Position
+
+	Var *Variable `parser:"@@ |"`
+	Num *int      `parser:"@Int"`
 }
 
 type Condition struct {

@@ -14,8 +14,9 @@ type Relation struct {
 }
 
 type Variable struct {
-	id    string
-	attrs map[string][]Attribute
+	id       string
+	attrs    map[string][]Attribute
+	constant bool // Represents a constant term
 }
 
 func (v Variable) String() string {

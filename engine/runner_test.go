@@ -315,6 +315,29 @@ in2("1","5",L2,0).`,
 				"out": {{[]string{"1", "2"}, "L1", 0}, {[]string{"2", "3"}, "L1", 0}},
 			},
 		},
+		{
+			msg: "constant terms",
+			source: `
+out(a,l,t) :- in(a,3,l,t)
+in("1","2",L1,0).
+in("2","3",L1,0).`,
+			facts: map[string][]*fact{
+				"out": {{[]string{"2"}, "L1", 0}},
+			},
+		},
+		{
+			msg: "join with constant terms",
+			source: `
+out(a,b,l,t) :- in1(a,b,l,t), in2(2,b,l,t)
+in1("1","2",L1,0).
+in1("3","3",L1,0).
+in2("2","3",L1,0).
+in2("2","4",L1,0).
+in2("1","2",L1,0).`,
+			facts: map[string][]*fact{
+				"out": {{[]string{"3", "3"}, "L1", 0}},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -335,10 +358,14 @@ in2("1","5",L2,0).`,
 			r.Step()
 
 			for rel, want := range tt.facts {
+				if _, ok := r.relations[rel]; !ok {
+					t.Errorf("the relation %q was not found in the engine state", rel)
+					continue
+				}
 				got := r.relations[rel].allAcrossSpaceTime()
 
 				if diff := cmp.Diff(got, want, cmp.AllowUnexported(fact{}), cmpopts.SortSlices(lessFacts)); diff != "" {
-					t.Errorf("fact diff (-got, +want):\n%s", diff)
+					t.Errorf("fact diff for relation %q (-got, +want):\n%s", rel, diff)
 				}
 			}
 		})
