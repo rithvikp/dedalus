@@ -37,7 +37,11 @@ var p4 = `add("1", "2", "3").
 out(a,b,c,c,l,t) :- in1(a,b,c,l,t), add(a,b,c)
 out(a,b,c,d,l,t) :- in2(a,b,c,d,l,t), add(a,b,c)
 `
-var p = p4
+
+var p5 = `add("1", "2", "3").
+out(a,c,l,t) :- in1(a,l,t), add(a,1,c)
+`
+var p = p5
 
 // TODO: These test functions currently just output to stdout for manual inspection. This will be changed soon.
 func TestFDs(t *testing.T) {
@@ -146,4 +150,32 @@ func TestFuncSub(t *testing.T) {
 	// if !varFDEqual(got, want) {
 	// 	t.Errorf("fds not equal for funcSub(g,f)+funcSub(h,f): got %+v, \n\n want %+v", got, want)
 	// }
+}
+
+func TestConstSub(t *testing.T) {
+	// Use a program to bootstrap data from which a fake FD can be constructed.
+	s := stateFromProgram(t, "out(a,b,c,d,l,t) :- in(a,b,c,d,l,t)")
+
+	attrs := s.Rules()[0].Head().Attrs()
+	a := varOrAttr{Attr: &attrs[0]}
+	b := varOrAttr{Attr: &attrs[1]}
+	c := varOrAttr{Attr: &attrs[2]}
+	d := varOrAttr{Attr: &attrs[3]}
+
+	h := &varOrAttrFD{
+		Dom:   []varOrAttr{a, b, c},
+		Codom: d,
+		f:     ExprFunc(AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2)), 3),
+	}
+
+	// h(a,b,c) --> h(a,b,3)
+	want := &varOrAttrFD{
+		Dom:   []varOrAttr{a, c},
+		Codom: d,
+		f:     ExprFunc(AddExp(AddExp(IdentityExp(0), number(3)), IdentityExp(1)), 2),
+	}
+	constSub(h, 3, *b.Attr)
+	if !varOrAttrFDEqual(h, want) {
+		t.Errorf("fds not equal for constSub(h,3,b): got %+v, \n\n want %+v", h, want)
+	}
 }

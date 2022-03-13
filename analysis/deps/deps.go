@@ -380,7 +380,13 @@ func Dep(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD], includ
 			// QUESTION: Filter out existing fd's for the head?
 		}
 
+		// Add reflexive fd's
 		for _, a := range rel.Attrs() {
+			// Skip constant attributes
+			if _, ok := rl.ConstOfAttr(a); ok {
+				continue
+			}
+
 			fd := &FD{
 				Dom:   []engine.Attribute{a},
 				Codom: a,
@@ -407,11 +413,15 @@ func Dep(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD], includ
 		}
 
 		for a := range attrs {
-			if false /* is const */ {
-				// FIXME
-			} else {
-				v := rl.VarOfAttr(a)
+			v, notConst := rl.VarOfAttr(a)
+			if notConst {
 				varSub(&g, v, a)
+			} else {
+				c, ok := rl.ConstOfAttr(a)
+				if !ok {
+					panic(fmt.Sprintf("Found an attribute %q which was not a variable or a constant", a))
+				}
+				constSub(&g, c, a)
 			}
 		}
 
@@ -492,6 +502,16 @@ func varSub(vafd *varOrAttrFD, v *engine.Variable, a engine.Attribute) {
 	vafd.Dom = newDom
 }
 
+func constSub(vafd *varOrAttrFD, val int, a engine.Attribute) {
+	for i := 0; i < len(vafd.Dom); i++ {
+		if vafd.Dom[i].Attr != nil && *vafd.Dom[i].Attr == a {
+			vafd.f.FunctionSubstitution(i, []int{}, ConstFunc(val))
+			vafd.Dom = slices.Delete(vafd.Dom, i, i+1)
+			i--
+		}
+	}
+}
+
 func attrDomSub(vafd *varOrAttrFD, a engine.Attribute, v *engine.Variable) {
 	for i := range vafd.Dom {
 		if vafd.Dom[i].Var != nil && vafd.Dom[i].Var == v {
@@ -515,13 +535,13 @@ func varOrAttrFDToVarFD(vafd *varOrAttrFD) *varFD {
 	}
 	for i, va := range vafd.Dom {
 		if va.Var == nil {
-			panic("All attributes should have been replaced by variables in the second phase of Dep()")
+			panic(fmt.Sprintf("All attributes should have been replaced by variables in the second phase of Dep(); %q was not", va.Attr.String()))
 		}
 		vfd.Dom[i] = va.Var
 	}
 
 	if vafd.Codom.Var == nil {
-		panic("All attributes should have been replaced by variables in the second phase of Dep()")
+		panic(fmt.Sprintf("All attributes should have been replaced by variables in the second phase of Dep(); %q was not", vafd.Codom.Attr.String()))
 	}
 	vfd.Codom = vafd.Codom.Var
 

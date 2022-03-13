@@ -110,12 +110,32 @@ func (r *Rule) Head() *Relation {
 	return r.head
 }
 
-func (r *Rule) VarOfAttr(a Attribute) *Variable {
+func (r *Rule) VarOfAttr(a Attribute) (*Variable, bool) {
 	if vars, ok := r.vars[a.relation.id]; ok {
-		return vars[a.index]
+		if vars[a.index].constant {
+			return nil, false
+		}
+		return vars[a.index], true
 	}
 
-	return r.headVarMapping[a.index].v
+	return r.headVarMapping[a.index].v, true
+}
+
+func (r *Rule) ConstOfAttr(a Attribute) (int, bool) {
+	if vars, ok := r.vars[a.relation.id]; ok {
+		if !vars[a.index].constant {
+			return 0, false
+		}
+
+		// TODO: Store a mapping instead of searching
+		for _, c := range r.conditions {
+			if expV, ok := c.e1.(*Variable); ok && expV == vars[a.index] {
+				return int(c.e2.(number)), true
+			}
+		}
+	}
+
+	return 0, false
 }
 
 func (v *Variable) Attrs() []Attribute {

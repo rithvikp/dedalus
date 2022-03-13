@@ -130,6 +130,10 @@ func IdentityFunc() Function {
 	return ExprFunc(IdentityExp(0), 1)
 }
 
+func ConstFunc(val int) Function {
+	return ExprFunc(number(val), 0)
+}
+
 func ExprFunc(exp Expression, domainDim int) Function {
 	dToI := make([]Set[int], domainDim)
 	for i := 0; i < domainDim; i++ {
