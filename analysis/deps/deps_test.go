@@ -117,57 +117,79 @@ func TestFuncSub(t *testing.T) {
 		Codom: e,
 		f:     ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2)), IdentityExp((3))), 4),
 	}
+	y := &varFD{
+		Dom:   []*engine.Variable{c},
+		Codom: d,
+		f:     ExprFunc(AddExp(IdentityExp(0), number(2)), 1),
+	}
 	z := &varFD{
 		Dom:   []*engine.Variable{d},
 		Codom: e,
 		f:     ExprFunc(AddExp(IdentityExp(0), number(3)), 1),
 	}
 
-	// h(a,b,c) --> h(a,g(a),c)
-	want := &varFD{
-		Dom:   []*engine.Variable{a, c},
-		Codom: d,
-		f:     ExprFunc(AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1)), 2),
-	}
-	got := funcSub(g, h)
-	if !varFDEqual(got, want) {
-		t.Errorf("fds not equal for funcSub(g,h): got %+v, \n\n want %+v", got, want)
+	tests := []struct {
+		msg            string
+		transformation func() *varFD
+		output         *varFD
+	}{
+		{
+			msg:            "Single substitution: h(a,b,c) --> h(a, g(a), c)",
+			transformation: func() *varFD { return funcSub(g, h) },
+			output: &varFD{
+				Dom:   []*engine.Variable{a, c},
+				Codom: d,
+				f:     ExprFunc(AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1)), 2),
+			},
+		},
+		{
+			msg:            "Single substitution (multi-var subst. domain): f(a,b,c,d) --> f(a,b,c,h(a,b,c))",
+			transformation: func() *varFD { return funcSub(h, f) },
+			output: &varFD{
+				Dom:   []*engine.Variable{a, b, c},
+				Codom: e,
+				f:     ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2)), AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2))), 3),
+			},
+		},
+		{
+			msg:            "Two substitutions: f(a,b,c,d) --> f(a, g(a), c, y(c)",
+			transformation: func() *varFD { return funcSub(y, funcSub(g, f)) },
+			output: &varFD{
+				Dom:   []*engine.Variable{a, c},
+				Codom: e,
+				f:     ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1)), AddExp(IdentityExp(1), number(2))), 2),
+			},
+		},
+		{
+			msg:            "Domain-increasing substitution: z(d) --> z(h(a,b,c))",
+			transformation: func() *varFD { return funcSub(h, z) },
+			output: &varFD{
+				Dom:   []*engine.Variable{a, b, c},
+				Codom: e,
+				f:     ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2)), number(3)), 3),
+			},
+		},
+		// {
+		// 	msg:            "Nested transformation: f(a, g(a), c, h(a,g(a),c))",
+		// 	transformation: func() *varFD { return funcSub(h, funcSub(g, f)) },
+		// 	output: &varFD{
+		// 		Dom:   []*engine.Variable{a, c},
+		// 		Codom: e,
+		// 		f: ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1)),
+		// 			AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1))), 2),
+		// 	},
+		// },
 	}
 
-	// f(a,b,c,d) --> f(a,b,c,h(a,b,c))
-	want = &varFD{
-		Dom:   []*engine.Variable{a, b, c},
-		Codom: e,
-		f:     ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2)), AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2))), 3),
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.msg, func(t *testing.T) {
+			got := tt.transformation()
+			if !varFDEqual(got, tt.output) {
+				t.Errorf("fds not equal: got %+v, \n\n want %+v", got, tt.output)
+			}
+		})
 	}
-	got = funcSub(h, f)
-	if !varFDEqual(got, want) {
-		t.Errorf("fds not equal for funcSub(h,f): got %+v, \n\n want %+v", got, want)
-	}
-
-	// z(d) --> z(h(a,b,c))
-	want = &varFD{
-		Dom:   []*engine.Variable{a, b, c},
-		Codom: e,
-		f:     ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2)), number(3)), 3),
-	}
-	got = funcSub(h, z)
-	if !varFDEqual(got, want) {
-		t.Errorf("fds not equal for funcSub(z,h): got %+v, \n\n want %+v", got, want)
-	}
-
-	// f(a,b,c,d) --> f(a,g(a),c,h(a,g(a),c))
-	// want = &varFD{
-	// 	Dom:   []*engine.Variable{a, c},
-	// 	Codom: e,
-	// 	f: ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1)),
-	// 		AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1))), 2),
-	// }
-	// got = funcSub(g, f)
-	// got = funcSub(h, got)
-	// if !varFDEqual(got, want) {
-	// 	t.Errorf("fds not equal for funcSub(g,f)+funcSub(h,f): got %+v, \n\n want %+v", got, want)
-	// }
 }
 
 func TestConstSub(t *testing.T) {

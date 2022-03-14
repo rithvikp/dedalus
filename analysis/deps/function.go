@@ -118,6 +118,7 @@ func (f *Function) AddToDomain(n int) {
 func (f *Function) FunctionSubstitution(substIndex int, domIndices []int, g Function) {
 	f.DomainDim -= 1
 
+	fmt.Println(domIndices, f.inputDim)
 	inputIndices := make([]int, len(domIndices))
 	for i, index := range domIndices {
 		inputIndices[i] = f.domainToInput[index].Elems()[0]
