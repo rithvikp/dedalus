@@ -145,7 +145,7 @@ func TestFuncSub(t *testing.T) {
 		t.Errorf("fds not equal for funcSub(h,f): got %+v, \n\n want %+v", got, want)
 	}
 
-	// z(d) --> z(a,b,c,<h(a,b,c)>)
+	// z(d) --> z(h(a,b,c))
 	want = &varFD{
 		Dom:   []*engine.Variable{a, b, c},
 		Codom: e,

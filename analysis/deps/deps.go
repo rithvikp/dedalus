@@ -458,7 +458,6 @@ func funcSub(sub *varFD, vfd *varFD) *varFD {
 		}
 	}
 
-	// FIXME: Add to domain of new function as necessary
 	found := false
 	for i, v := range vfd.Dom {
 		// This will only be run ONCE as a variable can only appear one time in the domain of a var FD.
