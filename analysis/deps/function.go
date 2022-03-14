@@ -107,6 +107,14 @@ func (f *Function) MergeDomain(indices []int) {
 	f.domainToInput = dToI
 }
 
+func (f *Function) AddToDomain(n int) {
+	for i := 0; i < n; i++ {
+		f.domainToInput = append(f.domainToInput, Set[int]{f.inputDim: true})
+		f.DomainDim++
+		f.inputDim++
+	}
+}
+
 func (f *Function) FunctionSubstitution(substIndex int, domIndices []int, g Function) {
 	f.DomainDim -= 1
 

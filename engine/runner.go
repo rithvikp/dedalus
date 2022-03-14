@@ -110,6 +110,10 @@ func (r *Rule) Head() *Relation {
 	return r.head
 }
 
+func (r *Rule) HeadVars() []*Variable {
+	return r.vars[r.head.id]
+}
+
 func (r *Rule) VarOfAttr(a Attribute) (*Variable, bool) {
 	if vars, ok := r.vars[a.relation.id]; ok {
 		if vars[a.index].constant {

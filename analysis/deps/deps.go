@@ -87,6 +87,10 @@ func (s Set[K]) Add(elems ...K) {
 	}
 }
 
+func (s Set[K]) Delete(elem K) {
+	delete(s, elem)
+}
+
 func (s Set[K]) Clone() Set[K] {
 	c := Set[K]{}
 	c.Union(s)
@@ -278,7 +282,6 @@ func DepClosure(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD])
 	newDeps := &SetFunc[*varFD]{equal: varFDEqual}
 	newDeps.Union(varDeps)
 
-	// TODO: Test the function substitution algorithm
 	fixpoint := false
 	for !fixpoint {
 		fixpoint = true
@@ -294,7 +297,6 @@ func DepClosure(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD])
 				domH := h.Dom
 				if slices.Contains(domH, codomG) {
 					newVFD := funcSub(g, h)
-					fmt.Printf("%+v\n%+v\n\n", g, h)
 					if !newDeps.Contains(newVFD) {
 						fixpoint = false
 					}
@@ -443,6 +445,16 @@ func funcSub(sub *varFD, vfd *varFD) *varFD {
 	for i, v := range vfd.Dom {
 		if subVars[v] {
 			subDomIndices = append(subDomIndices, i)
+			// A variable will only appear once in the domain
+			subVars.Delete(v)
+		}
+	}
+
+	newVars := make([]*engine.Variable, 0, len(subVars.Elems()))
+	for i, v := range sub.Dom {
+		if subVars[v] {
+			subDomIndices = append(subDomIndices, len(vfd.Dom)+i)
+			newVars = append(newVars, v)
 		}
 	}
 
@@ -452,9 +464,11 @@ func funcSub(sub *varFD, vfd *varFD) *varFD {
 		// This will only be run ONCE as a variable can only appear one time in the domain of a var FD.
 		if v == sub.Codom {
 			if found {
-				panic("The same variable cannot appear multiple times in the same function")
+				panic("The same variable cannot appear multiple times in the same functional dependency")
 			}
 			found = true
+
+			newVFD.f.AddToDomain(len(newVars))
 			newVFD.f.FunctionSubstitution(i, subDomIndices, sub.f)
 
 			// The function domain has shrunk, so adjust indices accordingly
@@ -472,6 +486,11 @@ func funcSub(sub *varFD, vfd *varFD) *varFD {
 		} else {
 			newVFD.Dom = append(newVFD.Dom, v)
 		}
+	}
+
+	// Only modify the function if a substitution match was found
+	if found {
+		newVFD.Dom = append(newVFD.Dom, newVars...)
 	}
 
 	return &newVFD

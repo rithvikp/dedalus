@@ -92,12 +92,15 @@ func TestDep(t *testing.T) {
 }
 
 func TestFuncSub(t *testing.T) {
-	// Single substitution
-	a := &engine.Variable{}
-	b := &engine.Variable{}
-	c := &engine.Variable{}
-	d := &engine.Variable{}
-	e := &engine.Variable{}
+	// Use a program to bootstrap data from which a fake FD can be constructed.
+	s := stateFromProgram(t, "out(a,b,c,d,e,l,t) :- in(a,b,c,d,e,l,t)")
+	vars := s.Rules()[0].HeadVars()
+
+	a := vars[0]
+	b := vars[1]
+	c := vars[2]
+	d := vars[3]
+	e := vars[4]
 
 	g := &varFD{
 		Dom:   []*engine.Variable{a},
@@ -113,6 +116,11 @@ func TestFuncSub(t *testing.T) {
 		Dom:   []*engine.Variable{a, b, c, d},
 		Codom: e,
 		f:     ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2)), IdentityExp((3))), 4),
+	}
+	z := &varFD{
+		Dom:   []*engine.Variable{d},
+		Codom: e,
+		f:     ExprFunc(AddExp(IdentityExp(0), number(3)), 1),
 	}
 
 	// h(a,b,c) --> h(a,g(a),c)
@@ -130,12 +138,22 @@ func TestFuncSub(t *testing.T) {
 	want = &varFD{
 		Dom:   []*engine.Variable{a, b, c},
 		Codom: e,
-		f: ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2)),
-			AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2))), 3),
+		f:     ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2)), AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2))), 3),
 	}
 	got = funcSub(h, f)
 	if !varFDEqual(got, want) {
 		t.Errorf("fds not equal for funcSub(h,f): got %+v, \n\n want %+v", got, want)
+	}
+
+	// z(d) --> z(a,b,c,<h(a,b,c)>)
+	want = &varFD{
+		Dom:   []*engine.Variable{a, b, c},
+		Codom: e,
+		f:     ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2)), number(3)), 3),
+	}
+	got = funcSub(h, z)
+	if !varFDEqual(got, want) {
+		t.Errorf("fds not equal for funcSub(z,h): got %+v, \n\n want %+v", got, want)
 	}
 
 	// f(a,b,c,d) --> f(a,g(a),c,h(a,g(a),c))
