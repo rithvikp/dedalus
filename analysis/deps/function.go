@@ -116,9 +116,9 @@ func (f *Function) AddToDomain(n int) {
 }
 
 func (f *Function) FunctionSubstitution(substIndex int, domIndices []int, g Function) {
+	g = g.Clone()
 	f.DomainDim -= 1
 
-	fmt.Println(domIndices, f.inputDim)
 	inputIndices := make([]int, len(domIndices))
 	for i, index := range domIndices {
 		inputIndices[i] = f.domainToInput[index].Elems()[0]
@@ -132,6 +132,15 @@ func (f *Function) FunctionSubstitution(substIndex int, domIndices []int, g Func
 			f.inputTransformations[i] = inputTransformation{inputIndices: inputIndices, f: g}
 		}
 	}
+
+	//for _, t := range f.inputTransformations {
+	//for i, index := range t.inputIndices {
+	//if !f.domainToInput[substIndex][index] {
+	//continue
+	//}
+	//t.f.FunctionSubstitution(i, )
+	//}
+	//}
 	f.domainToInput = slices.Delete(f.domainToInput, substIndex, substIndex+1)
 }
 

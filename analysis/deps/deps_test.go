@@ -169,22 +169,42 @@ func TestFuncSub(t *testing.T) {
 				f:     ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2)), number(3)), 3),
 			},
 		},
-		// {
-		// 	msg:            "Nested transformation: f(a, g(a), c, h(a,g(a),c))",
-		// 	transformation: func() *varFD { return funcSub(h, funcSub(g, f)) },
-		// 	output: &varFD{
-		// 		Dom:   []*engine.Variable{a, c},
-		// 		Codom: e,
-		// 		f: ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1)),
-		// 			AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1))), 2),
-		// 	},
-		// },
+		//{
+		//msg:            "Nested transformation: f(a,b,c,d) --> f(a, g(a), c, h(a,g(a),c))",
+		//transformation: func() *varFD { return funcSub(g, funcSub(h, f)) },
+		//output: &varFD{
+		//Dom:   []*engine.Variable{a, c},
+		//Codom: e,
+		//f: ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1)),
+		//AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1))), 2),
+		//},
+		//},
+		//{
+		//msg:            "Nested transformation (other direction): f(a,b,c,d) --> f(a, g(a), c, h(a,g(a),c))",
+		//transformation: func() *varFD { return funcSub(h, funcSub(g, f)) },
+		//output: &varFD{
+		//Dom:   []*engine.Variable{a, c},
+		//Codom: e,
+		//f: ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1)),
+		//AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1))), 2),
+		//},
+		//},
+		//{
+		//msg:            "Domain-increasing nested transformation: z(d) --> z(h(a,g(a),c))",
+		//transformation: func() *varFD { return funcSub(g, funcSub(h, z)) },
+		//output: &varFD{
+		//Dom:   []*engine.Variable{a, c},
+		//Codom: e,
+		//f:     ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1)), number(3)), 2),
+		//},
+		//},
 	}
 
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.msg, func(t *testing.T) {
 			got := tt.transformation()
+			//t.Log(got.f.inputTransformations)
 			if !varFDEqual(got, tt.output) {
 				t.Errorf("fds not equal: got %+v, \n\n want %+v", got, tt.output)
 			}
