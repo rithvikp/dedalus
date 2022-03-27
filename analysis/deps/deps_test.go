@@ -81,14 +81,70 @@ func TestDepClosure(t *testing.T) {
 }
 
 func TestDep(t *testing.T) {
-	s := stateFromProgram(t, p)
+	tests := []struct {
+		msg     string
+		program string
+		vFDs    func(*engine.Rule) *SetFunc[*varFD]
+	}{
+		{
+			msg:     "Reflexive FDs",
+			program: `out(a,b,c,l,t) :- in1(a,b,c,l,t)`,
+			vFDs: func(rl *engine.Rule) *SetFunc[*varFD] {
+				var vFDs []*varFD
+				for _, v := range rl.HeadVars() {
+					vFDs = append(vFDs, &varFD{
+						Dom:   []*engine.Variable{v},
+						Codom: v,
+						f:     IdentityFunc(),
+					})
+				}
 
-	existingFDs := map[*engine.Relation]*SetFunc[*FD]{}
-	vFDs := Dep(s.Rules()[0], existingFDs, false)
-	for _, dep := range vFDs.Elems() {
-		fmt.Printf("\n%v\n\n", dep)
+				s := &SetFunc[*varFD]{equal: varFDEqual}
+				s.Add(vFDs...)
+				return s
+			},
+		},
+		{
+			msg: "Operation FD",
+			program: `add("1", "2", "3").
+out(a,c,l,t) :- in1(a,l,t), add(a,1,c)`,
+			vFDs: func(rl *engine.Rule) *SetFunc[*varFD] {
+				var vFDs []*varFD
+				for _, v := range rl.HeadVars() {
+					vFDs = append(vFDs, &varFD{
+						Dom:   []*engine.Variable{v},
+						Codom: v,
+						f:     IdentityFunc(),
+					})
+				}
+
+				vFDs = append(vFDs, &varFD{
+					Dom:   []*engine.Variable{rl.HeadVars()[0]},
+					Codom: rl.HeadVars()[1],
+					f:     ExprFunc(AddExp(IdentityExp(0), number(1)), 1),
+				})
+
+				s := &SetFunc[*varFD]{equal: varFDEqual}
+				s.Add(vFDs...)
+				return s
+			},
+		},
 	}
-	fmt.Println("Num FDs:", len(vFDs.Elems()))
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.msg, func(t *testing.T) {
+			existingFDs := map[*engine.Relation]*SetFunc[*FD]{}
+			s := stateFromProgram(t, tt.program)
+			rl := s.Rules()[0]
+			got := Dep(rl, existingFDs, false)
+			want := tt.vFDs(rl)
+
+			if !got.Equal(want) {
+				t.Errorf("fds from Dep not equal: got %+v, \n\n want %+v", got, want)
+			}
+		})
+	}
 }
 
 func TestFuncSub(t *testing.T) {

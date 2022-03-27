@@ -56,7 +56,14 @@ func (s *SetFunc[K]) Elems() []K {
 	return s.elems
 }
 
+func (s *SetFunc[K]) Len() int {
+	return len(s.elems)
+}
+
 func (s *SetFunc[K]) Equal(other *SetFunc[K]) bool {
+	if s.Len() != other.Len() {
+		return false
+	}
 	for _, o := range other.Elems() {
 		found := false
 		for _, e := range s.elems {
