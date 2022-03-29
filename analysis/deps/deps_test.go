@@ -73,7 +73,7 @@ func TestDepClosure(t *testing.T) {
 	s := stateFromProgram(t, p)
 
 	existingFDs := map[*engine.Relation]*SetFunc[*FD]{}
-	fds := DepClosure(s.Rules()[0], existingFDs)
+	fds := DepClosure(s.Rules()[0], existingFDs, false)
 	for _, dep := range fds.Elems() {
 		fmt.Printf("\n%v\n\n", dep)
 	}

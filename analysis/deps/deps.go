@@ -268,7 +268,7 @@ func HeadFDs(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD]) *S
 	rAttrs := Set[engine.Attribute]{}
 	rAttrs.Add(rl.Head().Attrs()...)
 
-	for _, fd := range DepClosure(rl, existingFDs).Elems() {
+	for _, fd := range DepClosure(rl, existingFDs, false).Elems() {
 		subset := true
 		for _, a := range fd.Dom {
 			if !rAttrs[a] {
@@ -284,8 +284,8 @@ func HeadFDs(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD]) *S
 	return rDeps
 }
 
-func DepClosure(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD]) *SetFunc[*FD] {
-	varDeps := Dep(rl, existingFDs, false)
+func DepClosure(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD], includeNeg bool) *SetFunc[*FD] {
+	varDeps := Dep(rl, existingFDs, includeNeg)
 	newDeps := &SetFunc[*varFD]{equal: varFDEqual}
 	newDeps.Union(varDeps)
 
