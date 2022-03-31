@@ -57,7 +57,7 @@ func TestFunctionMergeDomain(t *testing.T) {
 			f:            ExprFunc(AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(3)), 5),
 			mergeIndices: [][]int{{0, 1}, {1, 3}},
 			inputs:       [][]int{{1, 2, 3}, {2, 5, 6}},
-			outputs:      []int{5, 10},
+			outputs:      []int{4, 9},
 		},
 	}
 
@@ -71,7 +71,7 @@ func TestFunctionMergeDomain(t *testing.T) {
 				got := tt.f.Eval(input)
 
 				if got != tt.outputs[i] {
-					t.Errorf("output diff: got %d, want %d", got, tt.outputs[i])
+					t.Errorf("output diff: got %d, want %d for merged function %v", got, tt.outputs[i], tt.f)
 				}
 			}
 		})
