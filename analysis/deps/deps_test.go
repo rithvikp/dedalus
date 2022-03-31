@@ -235,16 +235,18 @@ func TestFuncSub(t *testing.T) {
 					AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1))), 2),
 			},
 		},
-		//{
-		//msg:            "Nested transformation (other direction): f(a,b,c,d) --> f(a, g(a), c, h(a,g(a),c))",
-		//transformation: func() *varFD { return funcSub(h, funcSub(g, f)) },
-		//output: &varFD{
-		//Dom:   []*engine.Variable{a, c},
-		//Codom: e,
-		//f: ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1)),
-		//AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1))), 2),
-		//},
-		//},
+		{
+			// Requires updating all future substitutions with any relevant previous substitutions
+			// (substitute g(a) into h(a,b,c) before substituting h into f).
+			msg:            "Nested transformation (other direction): f(a,b,c,d) --> f(a, g(a), c, h(a,g(a),c))",
+			transformation: func() *varFD { return funcSub(h, funcSub(g, f)) },
+			output: &varFD{
+				Dom:   []*engine.Variable{a, c},
+				Codom: e,
+				f: ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1)),
+					AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1))), 2),
+			},
+		},
 		{
 			msg:            "Domain-increasing nested transformation: z(d) --> z(h(a,g(a),c))",
 			transformation: func() *varFD { return funcSub(g, funcSub(h, z)) },

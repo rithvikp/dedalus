@@ -145,9 +145,10 @@ func (fd *FD) Reflexive() bool {
 }
 
 type varFD struct {
-	Dom   []*engine.Variable
-	Codom *engine.Variable
-	f     Function
+	Dom           []*engine.Variable
+	Codom         *engine.Variable
+	f             Function
+	substitutions map[*engine.Variable]*varFD
 }
 
 func (fd varFD) String() string {
@@ -176,6 +177,8 @@ func varFDEqual(a, b *varFD) bool {
 	equal := slices.Equal(a.Dom, b.Dom)
 	equal = equal && a.Codom == b.Codom
 	equal = equal && funcEqual(a.f, b.f)
+	// The substitutions map is specifically not checked as "how" the fd got to its current state
+	// does not affect the equality condition.
 
 	return equal
 }
@@ -442,11 +445,26 @@ func Dep(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD], includ
 
 func funcSub(sub *varFD, vfd *varFD) *varFD {
 	newVFD := varFD{
-		Codom: vfd.Codom,
-		f:     vfd.f.Clone(),
+		Codom:         vfd.Codom,
+		f:             vfd.f.Clone(),
+		substitutions: maps.Clone(vfd.substitutions),
+	}
+	if _, ok := newVFD.substitutions[sub.Codom]; ok {
+		panic("The same variable cannot be substituted twice for a given FD.")
+	}
+	newVFD.substitutions[sub.Codom] = sub
+
+	// If a variable has already been substituted for vfd, substitute it into any future
+	// substitutions.
+	subVars := Set[*engine.Variable]{}
+	subVars.Add(sub.Dom...)
+	for _, transform := range newVFD.substitutions {
+		if subVars[transform.Codom] {
+			sub = funcSub(transform, sub)
+		}
 	}
 
-	subVars := Set[*engine.Variable]{}
+	subVars = Set[*engine.Variable]{}
 	subVars.Add(sub.Dom...)
 	subDomIndices := make([]int, 0, len(sub.Dom))
 	for i, v := range vfd.Dom {
@@ -476,19 +494,6 @@ func funcSub(sub *varFD, vfd *varFD) *varFD {
 
 			newVFD.f.AddToDomain(len(newVars))
 			newVFD.f.FunctionSubstitution(i, subDomIndices, sub.f)
-
-			// The function domain has shrunk, so adjust indices accordingly
-			// newSubDomIndices := make([]int, len(sub.Dom))
-			// for j, index := range subDomIndices {
-			// 	if index > i {
-			// 		newSubDomIndices[j] = index - 1
-			// 	} else if index < i {
-			// 		newSubDomIndices[j] = index
-			// 	} else {
-			// 		panic("A function cannot have the same variable in its domain and codomain")
-			// 	}
-			// 	subDomIndices = newSubDomIndices
-			// }
 		} else {
 			newVFD.Dom = append(newVFD.Dom, v)
 		}
@@ -555,8 +560,9 @@ func attrCodomSub(vafd *varOrAttrFD, a engine.Attribute, v *engine.Variable) {
 
 func varOrAttrFDToVarFD(vafd *varOrAttrFD) *varFD {
 	vfd := varFD{
-		Dom: make([]*engine.Variable, len(vafd.Dom)),
-		f:   vafd.f,
+		Dom:           make([]*engine.Variable, len(vafd.Dom)),
+		f:             vafd.f,
+		substitutions: map[*engine.Variable]*varFD{},
 	}
 	for i, va := range vafd.Dom {
 		if va.Var == nil {
