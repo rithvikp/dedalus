@@ -33,7 +33,11 @@ type Attribute struct {
 }
 
 func (a Attribute) String() string {
-	return fmt.Sprintf("Attr(%s,%d)", a.relation.id, a.index)
+	id := "<nil>"
+	if a.relation != nil {
+		id = a.relation.id
+	}
+	return fmt.Sprintf("Attr(%s,%d)", id, a.index)
 }
 
 type fact struct {
@@ -61,6 +65,10 @@ func (r *Relation) ID() string {
 
 func (r *Relation) IsEDB() bool {
 	return r.readOnly || r.id == "add" // FIXME
+}
+
+func (r *Relation) AppearsInBody() bool {
+	return len(r.bodyRules) > 0
 }
 
 func (r *Relation) Rules() []*Rule {

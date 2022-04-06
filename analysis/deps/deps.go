@@ -126,7 +126,7 @@ type Dep[IO DepIO] struct {
 	Dom           []IO
 	Codom         IO
 	f             Function
-	substitutions map[IO]*Dep[IO]
+	substitutions map[IO]Dep[IO]
 }
 
 func (d Dep[IO]) String() string {
@@ -160,7 +160,7 @@ func (d Dep[IO]) Clone() Dep[IO] {
 	}
 }
 
-func depEqual[IO DepIO](a, b *Dep[IO]) bool {
+func depEqual[IO DepIO](a, b Dep[IO]) bool {
 	equal := slices.Equal(a.Dom, b.Dom)
 	equal = equal && a.Codom == b.Codom
 	equal = equal && funcEqual(a.f, b.f)
@@ -193,12 +193,12 @@ func Analyze(s *engine.State) {
 
 }
 
-func FDs(s *engine.State) map[*engine.Relation]*SetFunc[*FD] {
-	fds := map[*engine.Relation]*SetFunc[*FD]{}
+func FDs(s *engine.State) map[*engine.Relation]*SetFunc[FD] {
+	fds := map[*engine.Relation]*SetFunc[FD]{}
 	oldFDs := maps.Clone(fds)
 	first := true
 
-	for first || !maps.EqualFunc(fds, oldFDs, func(a, b *SetFunc[*FD]) bool { return a.Equal(b) }) {
+	for first || !maps.EqualFunc(fds, oldFDs, func(a, b *SetFunc[FD]) bool { return a.Equal(b) }) {
 		first = false
 		maps.Clear(oldFDs)
 		for rel, s := range fds {
@@ -208,14 +208,14 @@ func FDs(s *engine.State) map[*engine.Relation]*SetFunc[*FD] {
 		for _, rl := range s.Rules() {
 			head := rl.Head()
 			if _, ok := fds[head]; !ok {
-				fds[head] = &SetFunc[*FD]{equal: fdEqual}
+				fds[head] = &SetFunc[FD]{equal: fdEqual}
 			}
 			fds[head].Union(HeadFDs(rl, fds))
 		}
 	}
 
 	first = true
-	for first || !maps.EqualFunc(fds, oldFDs, func(a, b *SetFunc[*FD]) bool { return a.Equal(b) }) {
+	for first || !maps.EqualFunc(fds, oldFDs, func(a, b *SetFunc[FD]) bool { return a.Equal(b) }) {
 		first = false
 		maps.Clear(oldFDs)
 		for rel, s := range fds {
@@ -225,15 +225,15 @@ func FDs(s *engine.State) map[*engine.Relation]*SetFunc[*FD] {
 		for _, rl := range s.Rules() {
 			head := rl.Head()
 			fdsNoR := maps.Clone(fds) // Note that this is a shallow copy
-			fdsNoR[head] = &SetFunc[*FD]{equal: fdEqual}
+			fdsNoR[head] = &SetFunc[FD]{equal: fdEqual}
 
 			fds[head].Intersect(HeadFDs(rl, fdsNoR))
 		}
 	}
 
-	finalFDs := map[*engine.Relation]*SetFunc[*FD]{}
+	finalFDs := map[*engine.Relation]*SetFunc[FD]{}
 	for rel, deps := range fds {
-		finalFDs[rel] = &SetFunc[*FD]{equal: fdEqual}
+		finalFDs[rel] = &SetFunc[FD]{equal: fdEqual}
 		for _, fd := range deps.Elems() {
 			if !fd.Reflexive() {
 				finalFDs[rel].Add(fd)
@@ -244,8 +244,8 @@ func FDs(s *engine.State) map[*engine.Relation]*SetFunc[*FD] {
 	return finalFDs
 }
 
-func HeadFDs(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD]) *SetFunc[*FD] {
-	rDeps := &SetFunc[*FD]{equal: fdEqual}
+func HeadFDs(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[FD]) *SetFunc[FD] {
+	rDeps := &SetFunc[FD]{equal: fdEqual}
 	rAttrs := Set[engine.Attribute]{}
 	rAttrs.Add(rl.Head().Attrs()...)
 
@@ -265,9 +265,9 @@ func HeadFDs(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD]) *S
 	return rDeps
 }
 
-func DepClosure(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD], includeNeg bool) *SetFunc[*FD] {
+func DepClosure(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[FD], includeNeg bool) *SetFunc[FD] {
 	varDeps := Deps(rl, existingFDs, includeNeg)
-	newDeps := &SetFunc[*varFD]{equal: varFDEqual}
+	newDeps := &SetFunc[varFD]{equal: varFDEqual}
 	newDeps.Union(varDeps)
 
 	fixpoint := false
@@ -294,10 +294,10 @@ func DepClosure(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD],
 		}
 	}
 
-	attrDeps := &SetFunc[*FD]{equal: fdEqual}
+	attrDeps := &SetFunc[FD]{equal: fdEqual}
 	for _, vfd := range newDeps.Elems() {
-		vafds := &SetFunc[*varOrAttrFD]{equal: varOrAttrFDEqual}
-		f := &varOrAttrFD{
+		vafds := &SetFunc[varOrAttrFD]{equal: varOrAttrFDEqual}
+		f := varOrAttrFD{
 			Dom:   make([]varOrAttr, len(vfd.Dom)),
 			Codom: varOrAttr{Var: vfd.Codom},
 			f:     vfd.f,
@@ -308,24 +308,24 @@ func DepClosure(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD],
 		vafds.Add(f)
 
 		for _, v := range vfd.Dom {
-			newVafds := &SetFunc[*varOrAttrFD]{equal: varOrAttrFDEqual}
+			newVafds := &SetFunc[varOrAttrFD]{equal: varOrAttrFDEqual}
 			for _, vafd := range vafds.Elems() {
 				for _, a := range v.Attrs() {
 					g := vafd.Clone()
-					attrDomSub(&g, a, v)
-					newVafds.Add(&g)
+					g = attrDomSub(g, a, v)
+					newVafds.Add(g)
 				}
 			}
 			vafds = newVafds
 		}
 
 		v := vfd.Codom
-		newVafds := &SetFunc[*varOrAttrFD]{equal: varOrAttrFDEqual}
+		newVafds := &SetFunc[varOrAttrFD]{equal: varOrAttrFDEqual}
 		for _, vafd := range vafds.Elems() {
 			for _, a := range v.Attrs() {
 				g := vafd.Clone()
-				attrCodomSub(&g, a, v)
-				newVafds.Add(&g)
+				g = attrCodomSub(g, a, v)
+				newVafds.Add(g)
 			}
 		}
 		vafds = newVafds
@@ -338,8 +338,8 @@ func DepClosure(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD],
 	return attrDeps
 }
 
-func Deps(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD], includeNeg bool) *SetFunc[*varFD] {
-	basicDeps := &SetFunc[*FD]{equal: fdEqual}
+func Deps(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[FD], includeNeg bool) *SetFunc[varFD] {
+	basicDeps := &SetFunc[FD]{equal: fdEqual}
 
 	relations := rl.Body()
 	relations = append(relations, rl.Head())
@@ -351,14 +351,14 @@ func Deps(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD], inclu
 			// TODO: Rewrite and clean EDB handling
 			switch rel.ID() {
 			case "add":
-				fd := &FD{
+				fd := FD{
 					Dom:   []engine.Attribute{rel.Attrs()[0], rel.Attrs()[1]},
 					Codom: rel.Attrs()[2],
 					f:     ExprFunc(AddExp(IdentityExp(0), IdentityExp(1)), 2),
 				}
 				basicDeps.Add(fd)
 			case "sub":
-				fd := &FD{
+				fd := FD{
 					Dom:   []engine.Attribute{rel.Attrs()[0], rel.Attrs()[1]},
 					Codom: rel.Attrs()[2],
 					f:     ExprFunc(SubExp(IdentityExp(0), IdentityExp(1)), 2),
@@ -377,7 +377,7 @@ func Deps(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD], inclu
 				continue
 			}
 
-			fd := &FD{
+			fd := FD{
 				Dom:   []engine.Attribute{a},
 				Codom: a,
 				f:     IdentityFunc(),
@@ -386,7 +386,7 @@ func Deps(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD], inclu
 		}
 	}
 
-	varDeps := &SetFunc[*varFD]{equal: varFDEqual}
+	varDeps := &SetFunc[varFD]{equal: varFDEqual}
 	for _, fd := range basicDeps.Elems() {
 		attrs := Set[engine.Attribute]{}
 		attrs.Add(fd.Codom)
@@ -405,27 +405,27 @@ func Deps(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD], inclu
 		for a := range attrs {
 			v, notConst := rl.VarOfAttr(a)
 			if notConst {
-				varSub(&g, v, a)
+				g = varSub(g, v, a)
 			} else {
 				c, ok := rl.ConstOfAttr(a)
 				if !ok {
 					panic(fmt.Sprintf("Found an attribute %q which was not a variable or a constant", a))
 				}
-				constSub(&g, c, a)
+				g = constSub(g, c, a)
 			}
 		}
 
-		varDeps.Add(varOrAttrFDToVarFD(&g))
+		varDeps.Add(varOrAttrFDToVarFD(g))
 	}
 
 	return varDeps
 }
 
-func funcSub[IO DepIO](sub *Dep[IO], dep *Dep[IO]) *Dep[IO] {
+func funcSub[IO DepIO](sub Dep[IO], dep Dep[IO]) Dep[IO] {
 	newDep := dep.Clone()
 	if _, ok := newDep.substitutions[sub.Codom]; ok {
 		//panic("The same input cannot be substituted twice for a given FD.")
-		return &newDep
+		return newDep
 	}
 	newDep.Dom = nil
 	newDep.substitutions[sub.Codom] = sub
@@ -480,10 +480,10 @@ func funcSub[IO DepIO](sub *Dep[IO], dep *Dep[IO]) *Dep[IO] {
 		newDep.Dom = append(newDep.Dom, newVars...)
 	}
 
-	return &newDep
+	return newDep
 }
 
-func varSub(vafd *varOrAttrFD, v *engine.Variable, a engine.Attribute) {
+func varSub(vafd varOrAttrFD, v *engine.Variable, a engine.Attribute) varOrAttrFD {
 	if vafd.Codom.Attr != nil && *vafd.Codom.Attr == a {
 		vafd.Codom.Var = v
 		vafd.Codom.Attr = nil
@@ -506,9 +506,11 @@ func varSub(vafd *varOrAttrFD, v *engine.Variable, a engine.Attribute) {
 	}
 	vafd.f.MergeDomain(mergeIndices)
 	vafd.Dom = newDom
+
+	return vafd
 }
 
-func constSub(vafd *varOrAttrFD, val int, a engine.Attribute) {
+func constSub(vafd varOrAttrFD, val int, a engine.Attribute) varOrAttrFD {
 	for i := 0; i < len(vafd.Dom); i++ {
 		if vafd.Dom[i].Attr != nil && *vafd.Dom[i].Attr == a {
 			vafd.f.FunctionSubstitution(i, []int{}, ConstFunc(val))
@@ -516,29 +518,32 @@ func constSub(vafd *varOrAttrFD, val int, a engine.Attribute) {
 			i--
 		}
 	}
+	return vafd
 }
 
-func attrDomSub(vafd *varOrAttrFD, a engine.Attribute, v *engine.Variable) {
+func attrDomSub(vafd varOrAttrFD, a engine.Attribute, v *engine.Variable) varOrAttrFD {
 	for i := range vafd.Dom {
 		if vafd.Dom[i].Var != nil && vafd.Dom[i].Var == v {
 			vafd.Dom[i].Attr = &a
 			vafd.Dom[i].Var = nil
 		}
 	}
+	return vafd
 }
 
-func attrCodomSub(vafd *varOrAttrFD, a engine.Attribute, v *engine.Variable) {
+func attrCodomSub(vafd varOrAttrFD, a engine.Attribute, v *engine.Variable) varOrAttrFD {
 	if vafd.Codom.Var != nil && vafd.Codom.Var == v {
 		vafd.Codom.Attr = &a
 		vafd.Codom.Var = nil
 	}
+	return vafd
 }
 
-func varOrAttrFDToVarFD(vafd *varOrAttrFD) *varFD {
+func varOrAttrFDToVarFD(vafd varOrAttrFD) varFD {
 	vfd := varFD{
 		Dom:           make([]*engine.Variable, len(vafd.Dom)),
 		f:             vafd.f,
-		substitutions: map[*engine.Variable]*varFD{},
+		substitutions: map[*engine.Variable]varFD{},
 	}
 	for i, va := range vafd.Dom {
 		if va.Var == nil {
@@ -552,10 +557,10 @@ func varOrAttrFDToVarFD(vafd *varOrAttrFD) *varFD {
 	}
 	vfd.Codom = vafd.Codom.Var
 
-	return &vfd
+	return vfd
 }
 
-func varOrAttrFDToFD(vafd *varOrAttrFD) *FD {
+func varOrAttrFDToFD(vafd varOrAttrFD) FD {
 	fd := FD{
 		Dom: make([]engine.Attribute, len(vafd.Dom)),
 		f:   vafd.f,
@@ -572,5 +577,5 @@ func varOrAttrFDToFD(vafd *varOrAttrFD) *FD {
 	}
 	fd.Codom = *vafd.Codom.Attr
 
-	return &fd
+	return fd
 }

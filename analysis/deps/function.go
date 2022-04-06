@@ -2,6 +2,7 @@ package deps
 
 import (
 	"fmt"
+	"strconv"
 
 	"golang.org/x/exp/slices"
 )
@@ -16,10 +17,11 @@ type Function struct {
 type Expression interface {
 	Eval(input []int) int
 	Replace(replacements map[int]Expression) Expression
+	String() string
 }
 
 func (f Function) String() string {
-	return fmt.Sprintf("{ Dom: %d, Codom: %d, Exp: %+v }", f.DomainDim, f.CodomainDim, f.exp)
+	return fmt.Sprintf("{ Dom: %d, Codom: %d, Exp: %v }", f.DomainDim, f.CodomainDim, f.exp)
 }
 
 func (f *Function) Clone() Function {
@@ -162,12 +164,20 @@ func (b binOp) Replace(replacements map[int]Expression) Expression {
 	}
 }
 
+func (b binOp) String() string {
+	return fmt.Sprintf("(%v) %v (%v)", b.e1, b.op, b.e2)
+}
+
 func (n number) Eval(input []int) int {
 	return int(n)
 }
 
 func (n number) Replace(replacements map[int]Expression) Expression {
 	return n
+}
+
+func (n number) String() string {
+	return strconv.Itoa(int(n))
 }
 
 func (i identity) Eval(input []int) int {
@@ -179,6 +189,10 @@ func (i identity) Replace(replacements map[int]Expression) Expression {
 		return exp
 	}
 	return i
+}
+
+func (i identity) String() string {
+	return fmt.Sprintf("x.%d", i.index)
 }
 
 func AddExp(right, left Expression) Expression {

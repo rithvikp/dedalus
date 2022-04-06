@@ -13,7 +13,6 @@ import (
 
 	"github.com/alecthomas/participle/v2/lexer"
 	"github.com/rithvikp/dedalus/ast"
-	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 )
 
@@ -93,8 +92,15 @@ func (s *State) Rules() []*Rule {
 	return s.rules
 }
 
-func (s *State) Relations() []*Relation {
-	return maps.Values(s.relations)
+func (s *State) NonEDBRelations() []*Relation {
+	// TODO: Move unused relation removal to the compilation phase
+	var rels []*Relation
+	for _, r := range s.relations {
+		if len(r.Rules()) > 0 && !r.IsEDB() {
+			rels = append(rels, r)
+		}
+	}
+	return rels
 }
 
 type Runner struct {

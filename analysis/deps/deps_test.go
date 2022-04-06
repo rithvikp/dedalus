@@ -9,6 +9,8 @@ import (
 	"github.com/rithvikp/dedalus/engine"
 )
 
+const preface = `add("1", "2", "3").`
+
 func stateFromProgram(t *testing.T, program string) *engine.State {
 	t.Helper()
 	p, err := ast.Parse(strings.NewReader(program))
@@ -61,7 +63,7 @@ func TestFDs(t *testing.T) {
 func TestHeadFDs(t *testing.T) {
 	s := stateFromProgram(t, p)
 
-	existingFDs := map[*engine.Relation]*SetFunc[*FD]{}
+	existingFDs := map[*engine.Relation]*SetFunc[FD]{}
 	fds := HeadFDs(s.Rules()[0], existingFDs)
 	for _, dep := range fds.Elems() {
 		fmt.Printf("\n%v\n\n", dep)
@@ -72,7 +74,7 @@ func TestHeadFDs(t *testing.T) {
 func TestDepClosure(t *testing.T) {
 	s := stateFromProgram(t, p)
 
-	existingFDs := map[*engine.Relation]*SetFunc[*FD]{}
+	existingFDs := map[*engine.Relation]*SetFunc[FD]{}
 	fds := DepClosure(s.Rules()[0], existingFDs, false)
 	for _, dep := range fds.Elems() {
 		fmt.Printf("\n%v\n\n", dep)
@@ -84,47 +86,46 @@ func TestDeps(t *testing.T) {
 	tests := []struct {
 		msg     string
 		program string
-		vFDs    func(*engine.Rule) *SetFunc[*varFD]
+		vFDs    func(*engine.Rule) *SetFunc[varFD]
 	}{
 		{
 			msg:     "Reflexive FDs",
 			program: `out(a,b,c,l,t) :- in1(a,b,c,l,t)`,
-			vFDs: func(rl *engine.Rule) *SetFunc[*varFD] {
-				var vFDs []*varFD
+			vFDs: func(rl *engine.Rule) *SetFunc[varFD] {
+				var vFDs []varFD
 				for _, v := range rl.HeadVars() {
-					vFDs = append(vFDs, &varFD{
+					vFDs = append(vFDs, varFD{
 						Dom:   []*engine.Variable{v},
 						Codom: v,
 						f:     IdentityFunc(),
 					})
 				}
 
-				s := &SetFunc[*varFD]{equal: varFDEqual}
+				s := &SetFunc[varFD]{equal: varFDEqual}
 				s.Add(vFDs...)
 				return s
 			},
 		},
 		{
-			msg: "Operation FD",
-			program: `add("1", "2", "3").
-out(a,c,l,t) :- in1(a,l,t), add(a,1,c)`,
-			vFDs: func(rl *engine.Rule) *SetFunc[*varFD] {
-				var vFDs []*varFD
+			msg:     "Operation FD",
+			program: `out(a,c,l,t) :- in1(a,l,t), add(a,1,c)`,
+			vFDs: func(rl *engine.Rule) *SetFunc[varFD] {
+				var vFDs []varFD
 				for _, v := range rl.HeadVars() {
-					vFDs = append(vFDs, &varFD{
+					vFDs = append(vFDs, varFD{
 						Dom:   []*engine.Variable{v},
 						Codom: v,
 						f:     IdentityFunc(),
 					})
 				}
 
-				vFDs = append(vFDs, &varFD{
+				vFDs = append(vFDs, varFD{
 					Dom:   []*engine.Variable{rl.HeadVars()[0]},
 					Codom: rl.HeadVars()[1],
 					f:     ExprFunc(AddExp(IdentityExp(0), number(1)), 1),
 				})
 
-				s := &SetFunc[*varFD]{equal: varFDEqual}
+				s := &SetFunc[varFD]{equal: varFDEqual}
 				s.Add(vFDs...)
 				return s
 			},
@@ -134,8 +135,8 @@ out(a,c,l,t) :- in1(a,l,t), add(a,1,c)`,
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.msg, func(t *testing.T) {
-			existingFDs := map[*engine.Relation]*SetFunc[*FD]{}
-			s := stateFromProgram(t, tt.program)
+			existingFDs := map[*engine.Relation]*SetFunc[FD]{}
+			s := stateFromProgram(t, preface+"\n"+tt.program)
 			rl := s.Rules()[0]
 			got := Deps(rl, existingFDs, false)
 			want := tt.vFDs(rl)
@@ -158,27 +159,27 @@ func TestFuncSub(t *testing.T) {
 	d := vars[3]
 	e := vars[4]
 
-	g := &varFD{
+	g := varFD{
 		Dom:   []*engine.Variable{a},
 		Codom: b,
 		f:     ExprFunc(AddExp(IdentityExp(0), number(3)), 1),
 	}
-	h := &varFD{
+	h := varFD{
 		Dom:   []*engine.Variable{a, b, c},
 		Codom: d,
 		f:     ExprFunc(AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2)), 3),
 	}
-	f := &varFD{
+	f := varFD{
 		Dom:   []*engine.Variable{a, b, c, d},
 		Codom: e,
 		f:     ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2)), IdentityExp((3))), 4),
 	}
-	y := &varFD{
+	y := varFD{
 		Dom:   []*engine.Variable{c},
 		Codom: d,
 		f:     ExprFunc(AddExp(IdentityExp(0), number(2)), 1),
 	}
-	z := &varFD{
+	z := varFD{
 		Dom:   []*engine.Variable{d},
 		Codom: e,
 		f:     ExprFunc(AddExp(IdentityExp(0), number(3)), 1),
@@ -186,13 +187,13 @@ func TestFuncSub(t *testing.T) {
 
 	tests := []struct {
 		msg            string
-		transformation func() *varFD
-		output         *varFD
+		transformation func() varFD
+		output         varFD
 	}{
 		{
 			msg:            "Single substitution: h(a,b,c) --> h(a, g(a), c)",
-			transformation: func() *varFD { return funcSub(g, h) },
-			output: &varFD{
+			transformation: func() varFD { return funcSub(g, h) },
+			output: varFD{
 				Dom:   []*engine.Variable{a, c},
 				Codom: d,
 				f:     ExprFunc(AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1)), 2),
@@ -200,8 +201,8 @@ func TestFuncSub(t *testing.T) {
 		},
 		{
 			msg:            "Single substitution (multi-var subst. domain): f(a,b,c,d) --> f(a,b,c,h(a,b,c))",
-			transformation: func() *varFD { return funcSub(h, f) },
-			output: &varFD{
+			transformation: func() varFD { return funcSub(h, f) },
+			output: varFD{
 				Dom:   []*engine.Variable{a, b, c},
 				Codom: e,
 				f:     ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2)), AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2))), 3),
@@ -209,8 +210,8 @@ func TestFuncSub(t *testing.T) {
 		},
 		{
 			msg:            "Two substitutions: f(a,b,c,d) --> f(a, g(a), c, y(c)",
-			transformation: func() *varFD { return funcSub(y, funcSub(g, f)) },
-			output: &varFD{
+			transformation: func() varFD { return funcSub(y, funcSub(g, f)) },
+			output: varFD{
 				Dom:   []*engine.Variable{a, c},
 				Codom: e,
 				f:     ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1)), AddExp(IdentityExp(1), number(2))), 2),
@@ -218,8 +219,8 @@ func TestFuncSub(t *testing.T) {
 		},
 		{
 			msg:            "Domain-increasing substitution: z(d) --> z(h(a,b,c))",
-			transformation: func() *varFD { return funcSub(h, z) },
-			output: &varFD{
+			transformation: func() varFD { return funcSub(h, z) },
+			output: varFD{
 				Dom:   []*engine.Variable{a, b, c},
 				Codom: e,
 				f:     ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2)), number(3)), 3),
@@ -227,8 +228,8 @@ func TestFuncSub(t *testing.T) {
 		},
 		{
 			msg:            "Nested transformation: f(a,b,c,d) --> f(a, g(a), c, h(a,g(a),c))",
-			transformation: func() *varFD { return funcSub(g, funcSub(h, f)) },
-			output: &varFD{
+			transformation: func() varFD { return funcSub(g, funcSub(h, f)) },
+			output: varFD{
 				Dom:   []*engine.Variable{a, c},
 				Codom: e,
 				f: ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1)),
@@ -239,8 +240,8 @@ func TestFuncSub(t *testing.T) {
 			// Requires updating all future substitutions with any relevant previous substitutions
 			// (substitute g(a) into h(a,b,c) before substituting h into f).
 			msg:            "Nested transformation (other direction): f(a,b,c,d) --> f(a, g(a), c, h(a,g(a),c))",
-			transformation: func() *varFD { return funcSub(h, funcSub(g, f)) },
-			output: &varFD{
+			transformation: func() varFD { return funcSub(h, funcSub(g, f)) },
+			output: varFD{
 				Dom:   []*engine.Variable{a, c},
 				Codom: e,
 				f: ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1)),
@@ -249,8 +250,8 @@ func TestFuncSub(t *testing.T) {
 		},
 		{
 			msg:            "Domain-increasing nested transformation: z(d) --> z(h(a,g(a),c))",
-			transformation: func() *varFD { return funcSub(g, funcSub(h, z)) },
-			output: &varFD{
+			transformation: func() varFD { return funcSub(g, funcSub(h, z)) },
+			output: varFD{
 				Dom:   []*engine.Variable{a, c},
 				Codom: e,
 				f:     ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1)), number(3)), 2),
@@ -279,20 +280,20 @@ func TestConstSub(t *testing.T) {
 	c := varOrAttr{Attr: &attrs[2]}
 	d := varOrAttr{Attr: &attrs[3]}
 
-	h := &varOrAttrFD{
+	h := varOrAttrFD{
 		Dom:   []varOrAttr{a, b, c},
 		Codom: d,
 		f:     ExprFunc(AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2)), 3),
 	}
 
 	// h(a,b,c) --> h(a,b,3)
-	want := &varOrAttrFD{
+	want := varOrAttrFD{
 		Dom:   []varOrAttr{a, c},
 		Codom: d,
 		f:     ExprFunc(AddExp(AddExp(IdentityExp(0), number(3)), IdentityExp(1)), 2),
 	}
-	constSub(h, 3, *b.Attr)
-	if !varOrAttrFDEqual(h, want) {
+	got := constSub(h, 3, *b.Attr)
+	if !varOrAttrFDEqual(got, want) {
 		t.Errorf("fds not equal for constSub(h,3,b): got %+v, \n\n want %+v", h, want)
 	}
 }
