@@ -80,7 +80,7 @@ func TestDepClosure(t *testing.T) {
 	fmt.Println("Num FDs:", len(fds.Elems()))
 }
 
-func TestDep(t *testing.T) {
+func TestDeps(t *testing.T) {
 	tests := []struct {
 		msg     string
 		program string
@@ -137,7 +137,7 @@ out(a,c,l,t) :- in1(a,l,t), add(a,1,c)`,
 			existingFDs := map[*engine.Relation]*SetFunc[*FD]{}
 			s := stateFromProgram(t, tt.program)
 			rl := s.Rules()[0]
-			got := Dep(rl, existingFDs, false)
+			got := Deps(rl, existingFDs, false)
 			want := tt.vFDs(rl)
 
 			if !got.Equal(want) {
@@ -262,7 +262,6 @@ func TestFuncSub(t *testing.T) {
 		tt := tt
 		t.Run(tt.msg, func(t *testing.T) {
 			got := tt.transformation()
-			//t.Log(got.f.inputTransformations)
 			if !varFDEqual(got, tt.output) {
 				t.Errorf("fds not equal: got %+v, \n\n want %+v", got, tt.output)
 			}

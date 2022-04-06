@@ -108,72 +108,51 @@ func (s Set[K]) Elems() []K {
 	return maps.Keys(s)
 }
 
-type FD struct {
-	Dom   []engine.Attribute
-	Codom engine.Attribute
-	f     Function
+type DepIO interface {
+	engine.Attribute | *engine.Variable | varOrAttr
+	String() string
 }
 
-func (fd FD) String() string {
-	b := strings.Builder{}
-	b.WriteString("{ Dom: [")
-	for i, a := range fd.Dom {
-		b.WriteString(a.String())
-		if i < len(fd.Dom)-1 {
-			b.WriteString(" ")
-		}
-	}
-	b.WriteString("], Codom: ")
-	b.WriteString(fd.Codom.String())
-	b.WriteString(", Func: ")
-	b.WriteString(fd.f.String())
-	b.WriteString(" }")
-
-	return b.String()
-}
-
-func fdEqual(a, b *FD) bool {
-	equal := slices.Equal(a.Dom, b.Dom)
-	equal = equal && a.Codom == b.Codom
-	equal = equal && funcEqual(a.f, b.f)
-
-	return equal
-}
-
-func (fd *FD) Reflexive() bool {
-	return len(fd.Dom) == 1 && fd.Dom[0] == fd.Codom
-}
-
-type varFD struct {
-	Dom           []*engine.Variable
-	Codom         *engine.Variable
+type Dep[IO DepIO] struct {
+	Dom           []IO
+	Codom         IO
 	f             Function
-	substitutions map[*engine.Variable]*varFD
+	substitutions map[IO]*Dep[IO]
 }
 
-func (fd varFD) String() string {
+func (d Dep[IO]) String() string {
 	b := strings.Builder{}
 	b.WriteString("{ Dom: [")
-	for i, v := range fd.Dom {
+	for i, v := range d.Dom {
 		b.WriteString(v.String())
-		if i < len(fd.Dom)-1 {
+		if i < len(d.Dom)-1 {
 			b.WriteString(" ")
 		}
 	}
 	b.WriteString("], Codom: ")
-	b.WriteString(fd.Codom.String())
+	b.WriteString(d.Codom.String())
 	b.WriteString(", Func: ")
-	b.WriteString(fd.f.String())
+	b.WriteString(d.f.String())
 	b.WriteString(" }")
 
 	return b.String()
 }
 
-func (v *varFD) Reflexive() bool {
-	return len(v.Dom) == 1 && v.Dom[0] == v.Codom
+func (d Dep[IO]) Reflexive() bool {
+	return len(d.Dom) == 1 && d.Dom[0] == d.Codom
 }
 
-func varFDEqual(a, b *varFD) bool {
+func (d Dep[IO]) Clone() Dep[IO] {
+	return  Dep[IO]{
+		Dom:   slices.Clone(d.Dom),
+		Codom: d.Codom,
+		f:     d.f.Clone(),
+		substitutions: maps.Clone(d.substitutions),
+	}
+}
+
+
+func depEqual[IO DepIO](a, b *Dep[IO]) bool {
 	equal := slices.Equal(a.Dom, b.Dom)
 	equal = equal && a.Codom == b.Codom
 	equal = equal && funcEqual(a.f, b.f)
@@ -183,32 +162,23 @@ func varFDEqual(a, b *varFD) bool {
 	return equal
 }
 
-type varOrAttrFD struct {
-	Dom   []varOrAttr
-	Codom varOrAttr
-	f     Function
-}
+type varFD = Dep[*engine.Variable]
+type FD = Dep[engine.Attribute]
+type varOrAttrFD = Dep[varOrAttr]
 
-func varOrAttrFDEqual(a, b *varOrAttrFD) bool {
-	equal := slices.Equal(a.Dom, b.Dom)
-	equal = equal && a.Codom == b.Codom
-	equal = equal && funcEqual(a.f, b.f)
-
-	return equal
-}
-
-func (v *varOrAttrFD) Clone() *varOrAttrFD {
-	n := &varOrAttrFD{
-		Dom:   slices.Clone(v.Dom),
-		Codom: v.Codom,
-		f:     v.f.Clone(),
-	}
-	return n
-}
+var (
+	fdEqual          = depEqual[engine.Attribute]
+	varFDEqual       = depEqual[*engine.Variable]
+	varOrAttrFDEqual = depEqual[varOrAttr]
+)
 
 type varOrAttr struct {
 	Var  *engine.Variable
 	Attr *engine.Attribute
+}
+
+func (v varOrAttr) String() string {
+	panic("varOrAttr String() not implemented")
 }
 
 func Analyze(s *engine.State) {
@@ -288,7 +258,7 @@ func HeadFDs(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD]) *S
 }
 
 func DepClosure(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD], includeNeg bool) *SetFunc[*FD] {
-	varDeps := Dep(rl, existingFDs, includeNeg)
+	varDeps := Deps(rl, existingFDs, includeNeg)
 	newDeps := &SetFunc[*varFD]{equal: varFDEqual}
 	newDeps.Union(varDeps)
 
@@ -334,8 +304,8 @@ func DepClosure(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD],
 			for _, vafd := range vafds.Elems() {
 				for _, a := range v.Attrs() {
 					g := vafd.Clone()
-					attrDomSub(g, a, v)
-					newVafds.Add(g)
+					attrDomSub(&g, a, v)
+					newVafds.Add(&g)
 				}
 			}
 			vafds = newVafds
@@ -346,8 +316,8 @@ func DepClosure(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD],
 		for _, vafd := range vafds.Elems() {
 			for _, a := range v.Attrs() {
 				g := vafd.Clone()
-				attrCodomSub(g, a, v)
-				newVafds.Add(g)
+				attrCodomSub(&g, a, v)
+				newVafds.Add(&g)
 			}
 		}
 		vafds = newVafds
@@ -360,7 +330,7 @@ func DepClosure(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD],
 	return attrDeps
 }
 
-func Dep(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD], includeNeg bool) *SetFunc[*varFD] {
+func Deps(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD], includeNeg bool) *SetFunc[*varFD] {
 	basicDeps := &SetFunc[*FD]{equal: fdEqual}
 
 	relations := rl.Body()
@@ -566,13 +536,13 @@ func varOrAttrFDToVarFD(vafd *varOrAttrFD) *varFD {
 	}
 	for i, va := range vafd.Dom {
 		if va.Var == nil {
-			panic(fmt.Sprintf("All attributes should have been replaced by variables in the second phase of Dep(); %q was not", va.Attr.String()))
+			panic(fmt.Sprintf("All attributes should have been replaced by variables in the second phase of Deps(); %q was not", va.Attr.String()))
 		}
 		vfd.Dom[i] = va.Var
 	}
 
 	if vafd.Codom.Var == nil {
-		panic(fmt.Sprintf("All attributes should have been replaced by variables in the second phase of Dep(); %q was not", vafd.Codom.Attr.String()))
+		panic(fmt.Sprintf("All attributes should have been replaced by variables in the second phase of Deps(); %q was not", vafd.Codom.Attr.String()))
 	}
 	vfd.Codom = vafd.Codom.Var
 

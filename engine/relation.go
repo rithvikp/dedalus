@@ -1,6 +1,10 @@
 package engine
 
-import "fmt"
+import (
+	"fmt"
+
+	"golang.org/x/exp/slices"
+)
 
 type Relation struct {
 	id          string
@@ -57,6 +61,10 @@ func (r *Relation) ID() string {
 
 func (r *Relation) IsEDB() bool {
 	return r.readOnly || r.id == "add" // FIXME
+}
+
+func (r *Relation) Rules() []*Rule {
+	return append(slices.Clone(r.bodyRules), r.headRules...)
 }
 
 func newRelation(id string, readOnly, autoPersist bool, indexCount int) *Relation {

@@ -13,6 +13,7 @@ import (
 
 	"github.com/alecthomas/participle/v2/lexer"
 	"github.com/rithvikp/dedalus/ast"
+	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 )
 
@@ -90,6 +91,10 @@ type State struct {
 
 func (s *State) Rules() []*Rule {
 	return s.rules
+}
+
+func (s *State) Relations() []*Relation {
+	return maps.Values(s.relations)
 }
 
 type Runner struct {
