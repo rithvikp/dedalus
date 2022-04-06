@@ -46,6 +46,15 @@ func (s *SetFunc[K]) Add(elems ...K) {
 	s.Union(&SetFunc[K]{elems: elems})
 }
 
+func (s *SetFunc[K]) Delete(elem K) {
+	i := slices.IndexFunc(s.elems, func(e K) bool { return s.equal(e, elem) })
+	if i == -1 {
+		return
+	}
+
+	s.elems = slices.Delete(s.elems, i, i+1)
+}
+
 func (s *SetFunc[K]) Clone() *SetFunc[K] {
 	c := &SetFunc[K]{equal: s.equal}
 	c.Union(s)
@@ -143,14 +152,13 @@ func (d Dep[IO]) Reflexive() bool {
 }
 
 func (d Dep[IO]) Clone() Dep[IO] {
-	return  Dep[IO]{
-		Dom:   slices.Clone(d.Dom),
-		Codom: d.Codom,
-		f:     d.f.Clone(),
+	return Dep[IO]{
+		Dom:           slices.Clone(d.Dom),
+		Codom:         d.Codom,
+		f:             d.f.Clone(),
 		substitutions: maps.Clone(d.substitutions),
 	}
 }
-
 
 func depEqual[IO DepIO](a, b *Dep[IO]) bool {
 	equal := slices.Equal(a.Dom, b.Dom)
@@ -413,68 +421,66 @@ func Deps(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[*FD], inclu
 	return varDeps
 }
 
-func funcSub(sub *varFD, vfd *varFD) *varFD {
-	newVFD := varFD{
-		Codom:         vfd.Codom,
-		f:             vfd.f.Clone(),
-		substitutions: maps.Clone(vfd.substitutions),
+func funcSub[IO DepIO](sub *Dep[IO], dep *Dep[IO]) *Dep[IO] {
+	newDep := dep.Clone()
+	if _, ok := newDep.substitutions[sub.Codom]; ok {
+		//panic("The same input cannot be substituted twice for a given FD.")
+		return &newDep
 	}
-	if _, ok := newVFD.substitutions[sub.Codom]; ok {
-		panic("The same variable cannot be substituted twice for a given FD.")
-	}
-	newVFD.substitutions[sub.Codom] = sub
+	newDep.Dom = nil
+	newDep.substitutions[sub.Codom] = sub
 
-	// If a variable has already been substituted for vfd, substitute it into any future
+	// If an input has already been substituted for dep, substitute it into any future
 	// substitutions.
-	subVars := Set[*engine.Variable]{}
+	subVars := Set[IO]{}
 	subVars.Add(sub.Dom...)
-	for _, transform := range newVFD.substitutions {
+	for _, transform := range newDep.substitutions {
 		if subVars[transform.Codom] {
 			sub = funcSub(transform, sub)
 		}
 	}
 
-	subVars = Set[*engine.Variable]{}
+	subVars = Set[IO]{}
 	subVars.Add(sub.Dom...)
 	subDomIndices := make([]int, 0, len(sub.Dom))
-	for i, v := range vfd.Dom {
+	for i, v := range dep.Dom {
 		if subVars[v] {
 			subDomIndices = append(subDomIndices, i)
-			// A variable will only appear once in the domain
+			// An input will only appear once in the domain
 			subVars.Delete(v)
 		}
 	}
 
-	newVars := make([]*engine.Variable, 0, len(subVars.Elems()))
+	newVars := make([]IO, 0, len(subVars.Elems()))
 	for i, v := range sub.Dom {
 		if subVars[v] {
-			subDomIndices = append(subDomIndices, len(vfd.Dom)+i)
+			subDomIndices = append(subDomIndices, len(dep.Dom)+i)
 			newVars = append(newVars, v)
 		}
 	}
 
 	found := false
-	for i, v := range vfd.Dom {
-		// This will only be run ONCE as a variable can only appear one time in the domain of a var FD.
+	for i, v := range dep.Dom {
+		// This will only be run ONCE as an input can only appear one time in the domain of a given fd.
 		if v == sub.Codom {
 			if found {
-				panic("The same variable cannot appear multiple times in the same functional dependency")
+				panic("The same input cannot appear multiple times in the same dependency")
 			}
 			found = true
 
-			newVFD.f.AddToDomain(len(newVars))
-			newVFD.f.FunctionSubstitution(i, subDomIndices, sub.f)
+			newDep.f.AddToDomain(len(newVars))
+			newDep.f.FunctionSubstitution(i, subDomIndices, sub.f)
 		} else {
-			newVFD.Dom = append(newVFD.Dom, v)
+			newDep.Dom = append(newDep.Dom, v)
 		}
 	}
 
 	// Only modify the function if a substitution match was found
 	if found {
-		newVFD.Dom = append(newVFD.Dom, newVars...)
+		newDep.Dom = append(newDep.Dom, newVars...)
 	}
 
-	return &newVFD
+	return &newDep
 }
 
 func varSub(vafd *varOrAttrFD, v *engine.Variable, a engine.Attribute) {

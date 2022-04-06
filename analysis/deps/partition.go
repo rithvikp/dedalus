@@ -6,26 +6,40 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-type PartitionFunction struct {
-	attribute engine.Attribute
-	f         Function
-	modulo    int
-}
+//type PartitionFunction struct {
+//attribute engine.Attribute
+//f         Function
+//modulo    int
+//}
 
-func partitionFunctionEqual(a, b PartitionFunction) bool {
-	equal := a.attribute == b.attribute
-	equal = equal && funcEqual(a.f, b.f)
-	equal = equal && a.modulo == b.modulo
-	return equal
-}
+//func partitionFunctionEqual(a, b PartitionFunction) bool {
+//equal := a.attribute == b.attribute
+//equal = equal && funcEqual(a.f, b.f)
+//equal = equal && a.modulo == b.modulo
+//return equal
+//}
 
-type DistPolicy map[*engine.Relation]PartitionFunction
+type PartitionFunc = Dep[engine.Attribute] // TODO: This is a temporary bypass
+var (
+	partitionFuncEqual = depEqual[engine.Attribute]
+)
+
+type DistPolicy map[*engine.Relation]*PartitionFunc
+
+func (p DistPolicy) Clone() DistPolicy {
+	newP := DistPolicy{}
+	for k, v := range p {
+		d := v.Clone()
+		newP[k] = &d
+	}
+	return newP
+}
 
 func distPolicyEqual(a, b DistPolicy) bool {
-	return maps.EqualFunc(a, b, partitionFunctionEqual)
+	return maps.EqualFunc(a, b, partitionFuncEqual)
 }
 
-func DistibutionPolicies(s *engine.State) []*DistPolicy {
+func DistibutionPolicies(s *engine.State) []DistPolicy {
 	copartDeps := CDs(s)
 	distPolicies := SetFunc[DistPolicy]{equal: distPolicyEqual}
 	for _, rel := range s.Relations() {
@@ -63,26 +77,57 @@ func DistibutionPolicies(s *engine.State) []*DistPolicy {
 
 		// See if all relations are compatible with this policy
 		relToCheck := maps.Keys(rWithNoPartFunc)[0]
-		partFuncsWithRDom := SetFunc[PartitionFunction]{equal: partitionFunctionEqual}
+		relToCheckDom := Set[engine.Attribute]{}
+		relToCheckDom.Add(relToCheck.Attrs()...)
+
+		partFuncsWithRDom := map[*engine.Relation]*SetFunc[*PartitionFunc]{}
 		for copartRel := range distPolicy {
+			// r = relToCheck, s = copartRel
 			if !haveSharedRules(relToCheck, copartRel) {
 				continue
 			}
 
-			partFuncs := SetFunc[DistPolicy]{equal: distPolicyEqual}
-			for {
-				oldPartFuncs := partFuncs.Clone()
+			partFuncs := &SetFunc[*PartitionFunc]{equal: partitionFuncEqual}
+			partFuncs.Add(distPolicy[copartRel])
+			oldPartFuncs := &SetFunc[*PartitionFunc]{equal: partitionFuncEqual}
+
+			for !partFuncs.Equal(oldPartFuncs) {
+				oldPartFuncs = partFuncs.Clone()
 				for _, g := range oldPartFuncs.Elems() {
 					for _, h := range copartDeps[CDMap{Dom: relToCheck, Codom: copartRel}].Elems() {
-						_ = g
-						_ = h
-						_ = partFuncsWithRDom
+						partFuncs.Add(funcSub(h, g))
 					}
 				}
 			}
+			partFuncsWithRDom[copartRel] = &SetFunc[*PartitionFunc]{equal: partitionFuncEqual}
+			for _, f := range partFuncs.Elems() {
+				for _, a := range f.Dom {
+					if relToCheckDom[a] {
+						partFuncsWithRDom[copartRel].Add(f)
+					}
+				}
+			}
+
+			if partFuncsWithRDom[copartRel].Len() == 0 {
+				distPolicies.Delete(distPolicy)
+				continue
+			}
+		}
+
+		consistentPartFuncs := &SetFunc[*PartitionFunc]{equal: partitionFuncEqual}
+		for _, funcs := range partFuncsWithRDom {
+			consistentPartFuncs.Union(funcs)
+		}
+		distPolicies.Delete(distPolicy)
+
+		for _, relToCheckPartFunc := range consistentPartFuncs.Elems() {
+			newDistPolicy := distPolicy.Clone()
+			newDistPolicy[relToCheck] = relToCheckPartFunc
+			distPolicies.Add(newDistPolicy)
 		}
 	}
-	return nil
+
+	return distPolicies.Elems()
 }
 
 func haveSharedRules(r1, r2 *engine.Relation) bool {
@@ -94,9 +139,9 @@ func haveSharedRules(r1, r2 *engine.Relation) bool {
 	return false
 }
 
-func modOnAttr(a engine.Attribute) PartitionFunction {
-	return PartitionFunction{
-		attribute: a,
-		f:         IdentityFunc(),
+func modOnAttr(a engine.Attribute) *PartitionFunc {
+	return &PartitionFunc{
+		Dom: []engine.Attribute{a},
+		f:   IdentityFunc(),
 	}
 }

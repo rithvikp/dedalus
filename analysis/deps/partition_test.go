@@ -1,21 +1,21 @@
 package deps
 
 import (
+	"fmt"
 	"testing"
 )
 
 // TODO: This test function currently just outputs to stdout for manual inspection. This will be changed soon.
 func TestDistributionPolicy(t *testing.T) {
-	s := stateFromProgram(t, p6)
+	s := stateFromProgram(t, p1)
 	_ = s
-	//cds := CDs(s)
-
-	//for cdMap, deps := range cds {
-	//fmt.Printf("\n============== %s -> %s ==============\n", cdMap.Dom.ID(), cdMap.Codom.ID())
-	//for _, dep := range deps.Elems() {
-	//fmt.Printf("\n%v\n\n", dep)
-	//}
-	//fmt.Println("Num FDs:", len(deps.Elems()))
-	//fmt.Printf("\n============================\n")
-	//}
+	policies := DistibutionPolicies(s)
+	for _, p := range policies {
+		fmt.Print("\n============================\n")
+		for rel, dep := range p {
+			fmt.Println(rel, p)
+			fmt.Printf("\n%v -> %v\n\n", rel, dep)
+		}
+		fmt.Printf("\n============================\n")
+	}
 }
