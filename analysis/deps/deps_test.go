@@ -9,7 +9,10 @@ import (
 	"github.com/rithvikp/dedalus/engine"
 )
 
-const preface = `add("1", "2", "3").`
+const preface = `add("1", "2", "3").
+f("a","b","c").
+g("a","b","c").
+`
 
 func stateFromProgram(t *testing.T, program string) *engine.State {
 	t.Helper()
@@ -130,6 +133,59 @@ func TestDeps(t *testing.T) {
 				return s
 			},
 		},
+		{
+			msg:     "Black Box FD",
+			program: `out(a,b,c,l,t) :- in1(a,b,l,t), f(a,b,c)`,
+			vFDs: func(rl *engine.Rule) *SetFunc[varFD] {
+				var vFDs []varFD
+				for _, v := range rl.HeadVars() {
+					vFDs = append(vFDs, varFD{
+						Dom:   []*engine.Variable{v},
+						Codom: v,
+						f:     IdentityFunc(),
+					})
+				}
+
+				vFDs = append(vFDs, varFD{
+					Dom:   []*engine.Variable{rl.HeadVars()[0], rl.HeadVars()[1]},
+					Codom: rl.HeadVars()[2],
+					f:     BlackBoxFunc("f", 2),
+				})
+
+				s := &SetFunc[varFD]{equal: varFDEqual}
+				s.Add(vFDs...)
+				return s
+			},
+		},
+		{
+			msg:     "Chained Black Box FD",
+			program: `out(a,b,c,d,e,l,t) :- in1(a,b,d,l,t), f(a,b,c), g(c,d,e)`,
+			vFDs: func(rl *engine.Rule) *SetFunc[varFD] {
+				var vFDs []varFD
+				for _, v := range rl.HeadVars() {
+					vFDs = append(vFDs, varFD{
+						Dom:   []*engine.Variable{v},
+						Codom: v,
+						f:     IdentityFunc(),
+					})
+				}
+
+				vFDs = append(vFDs, varFD{
+					Dom:   []*engine.Variable{rl.HeadVars()[0], rl.HeadVars()[1]},
+					Codom: rl.HeadVars()[2],
+					f:     BlackBoxFunc("f", 2),
+				})
+				vFDs = append(vFDs, varFD{
+					Dom:   []*engine.Variable{rl.HeadVars()[2], rl.HeadVars()[3]},
+					Codom: rl.HeadVars()[4],
+					f:     BlackBoxFunc("g", 2),
+				})
+
+				s := &SetFunc[varFD]{equal: varFDEqual}
+				s.Add(vFDs...)
+				return s
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -142,7 +198,7 @@ func TestDeps(t *testing.T) {
 			want := tt.vFDs(rl)
 
 			if !got.Equal(want) {
-				t.Errorf("fds from Dep not equal: got %+v, \n\n want %+v", got, want)
+				t.Errorf("fds from Dep not equal: got %+v, \n\n want %+v", got.Elems(), want.Elems())
 			}
 		})
 	}

@@ -364,6 +364,15 @@ func Deps(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[FD], includ
 					f:     ExprFunc(SubExp(IdentityExp(0), IdentityExp(1)), 2),
 				}
 				basicDeps.Add(fd)
+			case "f", "g":
+				fd := FD{
+					Dom:   []engine.Attribute{rel.Attrs()[0], rel.Attrs()[1]},
+					Codom: rel.Attrs()[2],
+					f:     BlackBoxFunc(rel.ID(), 2),
+				}
+				basicDeps.Add(fd)
+			default:
+				panic("Unhandled EDB found.")
 			}
 		} else if _, ok := existingFDs[rel]; ok && rel != rl.Head() {
 			basicDeps.Union(existingFDs[rel])

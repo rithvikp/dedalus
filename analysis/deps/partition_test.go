@@ -14,7 +14,40 @@ func TestDistributionPolicy(t *testing.T) {
 		policies func(s *engine.State) []DistPolicy
 	}{
 		{
-			msg:     "Join with add",
+			msg:     "Black Box: 2 relation join",
+			program: `out(a,c,l,t) :- in1(a,b,l,t), f(a,b,c), in2(c,l,t)`,
+			policies: func(s *engine.State) []DistPolicy {
+				in1 := s.Rules()[0].Body()[0]
+				in2 := s.Rules()[0].Body()[2]
+
+				var policies []DistPolicy
+				policies = append(policies, DistPolicy{
+					in1: DistFunction{Dom: in1.Attrs()[0:2], f: BlackBoxFunc("f", 2)},
+					in2: DistFunction{Dom: in2.Attrs()[0:1], f: IdentityFunc()},
+				})
+				return policies
+			},
+		},
+		// TODO: Need to enforce an ordering on attributes
+		//{
+		//msg:     "Black Box: Chained dependencies",
+		//program: `out(a,e,l,t) :- in1(a,b,d,l,t), f(a,b,c), g(c,d,e), in2(e,l,t)`,
+		//policies: func(s *engine.State) []DistPolicy {
+		//in1 := s.Rules()[0].Body()[0]
+		//in2 := s.Rules()[0].Body()[2]
+
+		//var policies []DistPolicy
+		//policies = append(policies, DistPolicy{
+		//in1: DistFunction{Dom: in1.Attrs()[0:3], f: NestedBlackBoxFunc("g", 3, map[int]Expression{
+		//0: BlackBoxExp("f", []int{0, 1}),
+		//})},
+		//in2: DistFunction{Dom: in2.Attrs()[0:1], f: IdentityFunc()},
+		//})
+		//return policies
+		//},
+		//},
+		{
+			msg:     "Arithmetic: Join with add",
 			program: `out(a,b,c,l,t) :- in1(a,b,c,l,t), add(a,b,c)`,
 			policies: func(s *engine.State) []DistPolicy {
 				in1 := s.Rules()[0].Body()[0]
@@ -29,7 +62,7 @@ func TestDistributionPolicy(t *testing.T) {
 			},
 		},
 		{
-			msg:     "Two relation join with add",
+			msg:     "Arithmetic: 2 relation join with add",
 			program: `out(a,c,l,t) :- in1(a,l,t), add(a,1,c), in2(c,l,t)`,
 			policies: func(s *engine.State) []DistPolicy {
 				in1 := s.Rules()[0].Body()[0]
@@ -44,7 +77,7 @@ func TestDistributionPolicy(t *testing.T) {
 			},
 		},
 		{
-			msg: "2 rules with different additive constants",
+			msg: "Arithmetic: 2 rules with different additive constants",
 			program: `
 				out1(a,c,l,t) :- in1(a,l,t), add(a,1,c), in2(c,l,t)
 				out2(a,c,l,t) :- in1(a,l,t), add(a,2,c), in2(c,l,t)`,
@@ -54,7 +87,7 @@ func TestDistributionPolicy(t *testing.T) {
 			},
 		},
 		{
-			msg: "3 rules with chained dependencies",
+			msg: "Arithmetic: 3 rules with chained dependencies",
 			program: `
 				out1(a,c,l,t) :- in1(a,l,t), add(a,1,c), in2(c,l,t)
 				out2(a,c,l,t) :- in2(a,l,t), add(a,2,c), in3(c,l,t)
@@ -76,7 +109,7 @@ func TestDistributionPolicy(t *testing.T) {
 			},
 		},
 		{
-			msg: "2 pairs of 2 rules with chained dependencies",
+			msg: "Arithmetic: 2 pairs of 2 rules with chained dependencies",
 			program: `
 				out1(a,c,l,t) :- in1(a,l,t), add(a,1,c), in2(c,l,t)
 				out2(a,c,l,t) :- in2(a,l,t), add(a,2,c), in3(c,l,t)
@@ -126,7 +159,11 @@ func TestDistributionPolicy(t *testing.T) {
 		})
 	}
 
-	//s := stateFromProgram(t, preface+"\n"+tests[2].program)
+	//p := `
+	//as2(x,z,l',t) :- as(x,y,l,t), f(y,a,l,t), locs(l,l',a)
+	//match(x,z,l,t) :- as(x,y,l,t), f(y,a,l,t), bs(a,z,l,t)
+	//`
+	//s := stateFromProgram(t, preface+"\n"+p)
 	//policies := DistibutionPolicies(s)
 	//for _, p := range policies {
 	//fmt.Print("\n============================\n")

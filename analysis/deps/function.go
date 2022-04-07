@@ -3,6 +3,7 @@ package deps
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"golang.org/x/exp/slices"
 )
@@ -86,6 +87,26 @@ func ConstFunc(val int) Function {
 	return ExprFunc(number(val), 0)
 }
 
+func BlackBoxFunc(id string, domainDim int) Function {
+	indices := make([]int, domainDim)
+	for i := 0; i < domainDim; i++ {
+		indices[i] = i
+	}
+	return ExprFunc(BlackBoxExp(id, indices), domainDim)
+}
+
+func NestedBlackBoxFunc(id string, domainDim int, transformations map[int]Expression) Function {
+	inputs := make([]Expression, domainDim)
+	for i := 0; i < domainDim; i++ {
+		if exp, ok := transformations[i]; ok {
+			inputs[i] = exp
+		} else {
+			inputs[i] = IdentityExp(i)
+		}
+	}
+	return ExprFunc(BlackBoxExpWithInputs(id, inputs), domainDim)
+}
+
 func ExprFunc(exp Expression, domainDim int) Function {
 	dToI := make([]Set[int], domainDim)
 	for i := 0; i < domainDim; i++ {
@@ -106,10 +127,34 @@ func funcEqual(a, b Function) bool {
 		return false
 	}
 
-	// This is a very basic heuristic for "equality" of functions
+	return exprEqual(a.exp, b.exp, a.DomainDim)
+}
+
+func exprEqual(a, b Expression, domainDim int) bool {
+	blackBox1, blackBox1Ok := a.(blackBox)
+	blackBox2, blackBox2Ok := b.(blackBox)
+
+	if blackBox1Ok && blackBox2Ok {
+		if blackBox1.id != blackBox2.id {
+			return false
+		} else if len(blackBox1.inputs) != len(blackBox2.inputs) {
+			return false
+		}
+		for i := 0; i < len(blackBox1.inputs); i++ {
+			if !exprEqual(blackBox1.inputs[i], blackBox2.inputs[i], domainDim) {
+				return false
+			}
+		}
+		return true
+
+	} else if (blackBox1Ok || blackBox2Ok) && !(blackBox1Ok && blackBox2Ok) {
+		panic("Cannot compare a black box expression to one that is not also black box")
+	}
+
+	// This is a very basic heuristic for "equality" of expressions
 	values := []int{0, 1, 31, 100}
 	for _, v := range values {
-		input := make([]int, a.DomainDim)
+		input := make([]int, domainDim)
 		for i := 0; i < len(input); i++ {
 			input[i] = v + i
 		}
@@ -127,6 +172,38 @@ func funcEqual(a, b Function) bool {
 	}
 
 	return true
+}
+
+type blackBox struct {
+	id     string
+	inputs []Expression
+}
+
+func (b blackBox) Replace(replacements map[int]Expression) Expression {
+	newInputs := make([]Expression, len(b.inputs))
+	for i, input := range b.inputs {
+		newInputs[i] = input.Replace(replacements)
+	}
+	return blackBox{id: b.id, inputs: newInputs}
+}
+
+func (b blackBox) String() string {
+	bs := strings.Builder{}
+	bs.WriteString(fmt.Sprintf("BlackBox(%s {", b.id))
+
+	for i, input := range b.inputs {
+		bs.WriteString(fmt.Sprintf("%d: %v", i, input))
+		if i < len(b.inputs)-1 {
+			bs.WriteString(", ")
+		}
+	}
+
+	bs.WriteString("})")
+	return bs.String()
+}
+
+func (b blackBox) Eval(input []int) int {
+	panic("Eval is not implemented for black box expressions")
 }
 
 type binOp struct {
@@ -213,4 +290,23 @@ func SubExp(right, left Expression) Expression {
 
 func IdentityExp(index int) Expression {
 	return identity{index: index}
+}
+
+func BlackBoxExp(id string, indices []int) Expression {
+	b := blackBox{
+		id:     id,
+		inputs: make([]Expression, len(indices)),
+	}
+	for i, inputIndex := range indices {
+		b.inputs[i] = IdentityExp(inputIndex)
+	}
+	return b
+}
+
+func BlackBoxExpWithInputs(id string, inputs []Expression) Expression {
+	b := blackBox{
+		id:     id,
+		inputs: inputs,
+	}
+	return b
 }
