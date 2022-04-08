@@ -89,6 +89,14 @@ func (s *SetFunc[K]) Equal(other *SetFunc[K]) bool {
 	return true
 }
 
+func (s *SetFunc[K]) String() string {
+	elems := make([]any, len(s.elems))
+	for i, e := range s.elems {
+		elems[i] = e
+	}
+	return fmt.Sprint(elems...)
+}
+
 type Set[K comparable] map[K]bool
 
 func (s Set[K]) Union(other Set[K]) {
@@ -216,7 +224,7 @@ type varOrAttr struct {
 }
 
 func (v varOrAttr) String() string {
-	panic("varOrAttr String() not implemented")
+	return fmt.Sprintf("varOrAttr(var: %v, attr: %v)", v.Var, v.Attr)
 }
 
 func Analyze(s *engine.State) {
@@ -279,7 +287,7 @@ func HeadFDs(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[FD]) *Se
 	rAttrs := Set[engine.Attribute]{}
 	rAttrs.Add(rl.Head().Attrs()...)
 
-	for _, fd := range DepClosure(rl, existingFDs, false).Elems() {
+	for _, fd := range DepsClosure(rl, existingFDs, false).Elems() {
 		subset := true
 		for _, a := range fd.Dom {
 			if !rAttrs[a] {
@@ -295,7 +303,7 @@ func HeadFDs(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[FD]) *Se
 	return rDeps
 }
 
-func DepClosure(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[FD], includeNeg bool) *SetFunc[FD] {
+func DepsClosure(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[FD], includeNeg bool) *SetFunc[FD] {
 	varDeps := Deps(rl, existingFDs, includeNeg)
 	newDeps := &SetFunc[varFD]{equal: varFDEqual}
 	newDeps.Union(varDeps)
@@ -606,13 +614,13 @@ func varOrAttrFDToFD(vafd varOrAttrFD) FD {
 	}
 	for i, va := range vafd.Dom {
 		if va.Attr == nil {
-			panic("All variables should have been replaced by attributes in the second phase of DepClosure()")
+			panic("All variables should have been replaced by attributes in the second phase of DepsClosure()")
 		}
 		fd.Dom[i] = *va.Attr
 	}
 
 	if vafd.Codom.Attr == nil {
-		panic("All variables should have been replaced by attributes in the second phase of DepClosure()")
+		panic("All variables should have been replaced by attributes in the second phase of DepsClosure()")
 	}
 	fd.Codom = *vafd.Codom.Attr
 

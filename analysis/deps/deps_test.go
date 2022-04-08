@@ -1,7 +1,6 @@
 package deps
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -48,42 +47,139 @@ out(a,c,l,t) :- in1(a,l,t), add(a,1,c)
 `
 var p = p5
 
-// TODO: These test functions currently just output to stdout for manual inspection. This will be changed soon.
 func TestFDs(t *testing.T) {
-	s := stateFromProgram(t, p)
+	tests := []struct {
+		msg     string
+		program string
+		fds     func(*engine.State) map[*engine.Relation]*SetFunc[FD]
+	}{
+		{
+			msg: "Black Box FD",
+			program: `out(a,b,c,l,t) :- in1(a,b,l,t), f(a,b,c)
+					  out(a,b,c,l,t) :- in2(a,b,l,t), f(a,b,c)`,
+			fds: func(s *engine.State) map[*engine.Relation]*SetFunc[FD] {
+				fds := map[*engine.Relation]*SetFunc[FD]{}
+				rl := s.Rules()[0]
+				fds[rl.Head()] = &SetFunc[FD]{equal: fdEqual}
+				fds[rl.Head()].Add(FD{
+					Dom:   []engine.Attribute{rl.Head().Attrs()[0], rl.Head().Attrs()[1]},
+					Codom: rl.Head().Attrs()[2],
+					f:     BlackBoxFunc("f", 2),
+				})
 
-	fds := FDs(s)
-	for rel, deps := range fds {
-		fmt.Printf("\n==============%s==============\n", rel.ID())
-		for _, dep := range deps.Elems() {
-			fmt.Printf("\n%v\n\n", dep)
-		}
-		fmt.Println("Num FDs:", len(deps.Elems()))
-		fmt.Printf("\n============================\n")
+				return fds
+			},
+		},
+		{
+			msg:     "Multiple Black Box FDs",
+			program: `out(a,b,c,d,e,f,l,t) :- in1(a,b,d,e,l,t), f(a,b,c), g(d,e,f)`,
+			fds: func(s *engine.State) map[*engine.Relation]*SetFunc[FD] {
+				fds := map[*engine.Relation]*SetFunc[FD]{}
+				rl := s.Rules()[0]
+				fds[rl.Head()] = &SetFunc[FD]{equal: fdEqual}
+				fds[rl.Head()].Add(FD{
+					Dom:   []engine.Attribute{rl.Head().Attrs()[0], rl.Head().Attrs()[1]},
+					Codom: rl.Head().Attrs()[2],
+					f:     BlackBoxFunc("f", 2),
+				})
+				fds[rl.Head()].Add(FD{
+					Dom:   []engine.Attribute{rl.Head().Attrs()[3], rl.Head().Attrs()[4]},
+					Codom: rl.Head().Attrs()[5],
+					f:     BlackBoxFunc("g", 2),
+				})
+
+				return fds
+			},
+		},
+		{
+			msg:     "No FDs if relevant attributes aren't also in the head",
+			program: `out(a,c,l,t) :- in1(a,b,l,t), f(a,b,c)`,
+			fds: func(s *engine.State) map[*engine.Relation]*SetFunc[FD] {
+				return map[*engine.Relation]*SetFunc[FD]{}
+			},
+		},
+		{
+			msg: "No FDs if relationships are not consistent across rules",
+			program: `out1(a,b,c,l,t) :- in1(a,b,l,t), f(a,b,c)
+					  out1(a,b,c,l,t) :- in2(a,b,l,t), f(b,a,c)
+
+					  out2(a,b,c,l,t) :- in1(a,b,l,t), f(a,b,c)
+					  out2(c,a,b,l,t) :- in2(a,b,l,t), f(a,b,c)`,
+			fds: func(s *engine.State) map[*engine.Relation]*SetFunc[FD] {
+				return map[*engine.Relation]*SetFunc[FD]{}
+			},
+		},
 	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.msg, func(t *testing.T) {
+			s := stateFromProgram(t, preface+"\n"+tt.program)
+			got := FDs(s)
+			want := tt.fds(s)
+
+			checkMatch := func(rel *engine.Relation, fds *SetFunc[FD], toCheck map[*engine.Relation]*SetFunc[FD]) bool {
+				if _, ok := want[rel]; !ok {
+					if fds.Len() == 0 {
+						return true
+					}
+					return false
+				}
+				return fds.Equal(toCheck[rel])
+			}
+			equal := true
+			for rel, fds := range got {
+				if !checkMatch(rel, fds, want) {
+					equal = false
+					break
+				}
+			}
+			for rel, fds := range want {
+				if !checkMatch(rel, fds, got) {
+					equal = false
+					break
+				}
+			}
+
+			if !equal {
+				t.Errorf("Derived fds not equal: got %+v, \n\n want %+v", got, want)
+			}
+		})
+	}
+
+	//s := stateFromProgram(t, p)
+	//fds := FDs(s)
+	//for rel, deps := range fds {
+	//fmt.Printf("\n==============%s==============\n", rel.ID())
+	//for _, dep := range deps.Elems() {
+	//fmt.Printf("\n%v\n\n", dep)
+	//}
+	//fmt.Println("Num FDs:", len(deps.Elems()))
+	//fmt.Printf("\n============================\n")
+	//}
 }
 
-func TestHeadFDs(t *testing.T) {
-	s := stateFromProgram(t, p)
+//func TestHeadFDs(t *testing.T) {
+//s := stateFromProgram(t, p)
 
-	existingFDs := map[*engine.Relation]*SetFunc[FD]{}
-	fds := HeadFDs(s.Rules()[0], existingFDs)
-	for _, dep := range fds.Elems() {
-		fmt.Printf("\n%v\n\n", dep)
-	}
-	fmt.Println("Num FDs:", len(fds.Elems()))
-}
+//existingFDs := map[*engine.Relation]*SetFunc[FD]{}
+//fds := HeadFDs(s.Rules()[0], existingFDs)
+//for _, dep := range fds.Elems() {
+//fmt.Printf("\n%v\n\n", dep)
+//}
+//fmt.Println("Num FDs:", len(fds.Elems()))
+//}
 
-func TestDepClosure(t *testing.T) {
-	s := stateFromProgram(t, p)
+//func TestDepsClosure(t *testing.T) {
+//s := stateFromProgram(t, p)
 
-	existingFDs := map[*engine.Relation]*SetFunc[FD]{}
-	fds := DepClosure(s.Rules()[0], existingFDs, false)
-	for _, dep := range fds.Elems() {
-		fmt.Printf("\n%v\n\n", dep)
-	}
-	fmt.Println("Num FDs:", len(fds.Elems()))
-}
+//existingFDs := map[*engine.Relation]*SetFunc[FD]{}
+//fds := DepsClosure(s.Rules()[0], existingFDs, false)
+//for _, dep := range fds.Elems() {
+//fmt.Printf("\n%v\n\n", dep)
+//}
+//fmt.Println("Num FDs:", len(fds.Elems()))
+//}
 
 func TestDeps(t *testing.T) {
 	tests := []struct {
@@ -198,7 +294,7 @@ func TestDeps(t *testing.T) {
 			want := tt.vFDs(rl)
 
 			if !got.Equal(want) {
-				t.Errorf("fds from Dep not equal: got %+v, \n\n want %+v", got.Elems(), want.Elems())
+				t.Errorf("fds from Dep not equal: got %+v, \n\n want %+v", got, want)
 			}
 		})
 	}

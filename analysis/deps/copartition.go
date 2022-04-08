@@ -42,7 +42,7 @@ func CDs(s *engine.State) map[CDMap]*SetFunc[FD] {
 
 func cdsForRelInRule(domRel *engine.Relation, rl *engine.Rule, fds map[*engine.Relation]*SetFunc[FD]) map[*engine.Relation]*SetFunc[FD] {
 	newRDeps := map[*engine.Relation]*SetFunc[FD]{}
-	for _, fd := range DepClosure(rl, fds, true).Elems() {
+	for _, fd := range DepsClosure(rl, fds, true).Elems() {
 		if !sliceSubset(domRel.Attrs(), fd.Dom) {
 			continue
 		}

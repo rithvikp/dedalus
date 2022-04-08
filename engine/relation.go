@@ -68,12 +68,16 @@ func (r *Relation) Attrs() []Attribute {
 	return attrs
 }
 
+func (r *Relation) String() string {
+	return r.id
+}
+
 func (r *Relation) ID() string {
 	return r.id
 }
 
 func (r *Relation) IsEDB() bool {
-	return r.readOnly || r.id == "add" // FIXME
+	return r.readOnly // FIXME
 }
 
 func (r *Relation) AppearsInBody() bool {

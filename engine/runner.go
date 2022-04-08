@@ -107,6 +107,10 @@ type Runner struct {
 	*State
 }
 
+func (r *Rule) ID() string {
+	return r.id
+}
+
 func (r *Rule) Body() []*Relation {
 	body := make([]*Relation, len(r.body))
 	copy(body, r.body)
