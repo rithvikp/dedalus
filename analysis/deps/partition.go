@@ -181,6 +181,7 @@ func DistibutionPolicies(s *engine.State) []DistPolicy {
 	for _, p := range policies.Elems() {
 		finalP := DistPolicy{}
 		for rel, pf := range p {
+			pf = pf.Normalize()
 			finalP[rel] = DistFunction{
 				Dom: pf.Dom,
 				f:   pf.f,

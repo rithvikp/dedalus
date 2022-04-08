@@ -40,6 +40,15 @@ func (a Attribute) String() string {
 	return fmt.Sprintf("Attr(%s,%d)", id, a.index)
 }
 
+func (a Attribute) LessThan(b Attribute) bool {
+	if a.relation.id < b.relation.id {
+		return true
+	} else if a.relation.id > b.relation.id {
+		return false
+	}
+	return a.index < b.index
+}
+
 type fact struct {
 	data      []string
 	location  string

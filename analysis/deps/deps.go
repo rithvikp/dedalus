@@ -160,6 +160,36 @@ func (d Dep[IO]) Clone() Dep[IO] {
 	}
 }
 
+func (d Dep[IO]) Normalize() Dep[IO] {
+	// Normalization is currently only defined for attribute-based dependencies
+	// Specialization is unfortunately a little hack-y.
+	switch d := (interface{})(&d).(type) {
+	case *Dep[engine.Attribute]:
+		sortedDom := slices.Clone(d.Dom)
+		slices.SortFunc(sortedDom, func(a, b engine.Attribute) bool {
+			return a.LessThan(b)
+		})
+		newPositions := map[engine.Attribute]int{}
+		for i, a := range sortedDom {
+			newPositions[a] = i
+		}
+
+		replacements := map[int]Expression{}
+		for i := 0; i < len(d.Dom); i++ {
+			newIndex := newPositions[d.Dom[i]]
+			if newIndex != i {
+				replacements[i] = IdentityExp(newIndex)
+			}
+		}
+
+		if len(replacements) > 0 {
+			d.Dom = sortedDom
+			d.f.exp = d.f.exp.Replace(replacements)
+		}
+	}
+	return d
+}
+
 func depEqual[IO DepIO](a, b Dep[IO]) bool {
 	equal := slices.Equal(a.Dom, b.Dom)
 	equal = equal && a.Codom == b.Codom
@@ -331,7 +361,7 @@ func DepClosure(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[FD], 
 		vafds = newVafds
 
 		for _, vafd := range vafds.Elems() {
-			attrDeps.Add(varOrAttrFDToFD(vafd))
+			attrDeps.Add(varOrAttrFDToFD(vafd).Normalize())
 		}
 	}
 

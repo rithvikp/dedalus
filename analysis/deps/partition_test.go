@@ -28,24 +28,24 @@ func TestDistributionPolicy(t *testing.T) {
 				return policies
 			},
 		},
-		// TODO: Need to enforce an ordering on attributes
-		//{
-		//msg:     "Black Box: Chained dependencies",
-		//program: `out(a,e,l,t) :- in1(a,b,d,l,t), f(a,b,c), g(c,d,e), in2(e,l,t)`,
-		//policies: func(s *engine.State) []DistPolicy {
-		//in1 := s.Rules()[0].Body()[0]
-		//in2 := s.Rules()[0].Body()[2]
+		{ // TODO: Add attr. sorting + black box canonicalization
+			msg:     "Black Box: Chained dependencies",
+			program: `out(a,e,l,t) :- in1(a,b,d,l,t), f(a,b,c), g(c,d,e), in2(e,l,t)`,
+			policies: func(s *engine.State) []DistPolicy {
+				in1 := s.Rules()[0].Body()[0]
+				in2 := s.Rules()[0].Body()[3]
 
-		//var policies []DistPolicy
-		//policies = append(policies, DistPolicy{
-		//in1: DistFunction{Dom: in1.Attrs()[0:3], f: NestedBlackBoxFunc("g", 3, map[int]Expression{
-		//0: BlackBoxExp("f", []int{0, 1}),
-		//})},
-		//in2: DistFunction{Dom: in2.Attrs()[0:1], f: IdentityFunc()},
-		//})
-		//return policies
-		//},
-		//},
+				var policies []DistPolicy
+				policies = append(policies, DistPolicy{
+					in1: DistFunction{Dom: in1.Attrs()[0:3], f: NestedBlackBoxFunc("g", 3, 2, map[int]Expression{
+						0: BlackBoxExp("f", []int{0, 1}),
+						1: IdentityExp(2),
+					})},
+					in2: DistFunction{Dom: in2.Attrs()[0:1], f: IdentityFunc()},
+				})
+				return policies
+			},
+		},
 		{
 			msg:     "Arithmetic: Join with add",
 			program: `out(a,b,c,l,t) :- in1(a,b,c,l,t), add(a,b,c)`,

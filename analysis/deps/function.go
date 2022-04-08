@@ -95,9 +95,9 @@ func BlackBoxFunc(id string, domainDim int) Function {
 	return ExprFunc(BlackBoxExp(id, indices), domainDim)
 }
 
-func NestedBlackBoxFunc(id string, domainDim int, transformations map[int]Expression) Function {
-	inputs := make([]Expression, domainDim)
-	for i := 0; i < domainDim; i++ {
+func NestedBlackBoxFunc(id string, domainDim, blackBoxDomainDim int, transformations map[int]Expression) Function {
+	inputs := make([]Expression, blackBoxDomainDim)
+	for i := 0; i < blackBoxDomainDim; i++ {
 		if exp, ok := transformations[i]; ok {
 			inputs[i] = exp
 		} else {
