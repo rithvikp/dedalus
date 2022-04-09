@@ -3,6 +3,7 @@ package engine
 import (
 	"fmt"
 
+	"github.com/rithvikp/dedalus/analysis/fn"
 	"golang.org/x/exp/slices"
 )
 
@@ -80,7 +81,40 @@ func (r *Relation) IsEDB() bool {
 	return r.readOnly // FIXME
 }
 
-func (r *Relation) AppearsInBody() bool {
+type CoreFD struct {
+	Dom   []Attribute
+	Codom Attribute
+	Func  fn.Func
+}
+
+// TODO: Add support for user-specified core fds
+func (r *Relation) CoreFDs() []CoreFD {
+	// Core FDs are only defined for EDBs
+	if !r.IsEDB() {
+		return nil
+	}
+
+	var fds []CoreFD
+	switch r.ID() {
+	case "add":
+		fds = append(fds, CoreFD{
+			Dom:   []Attribute{r.Attrs()[0], r.Attrs()[1]},
+			Codom: r.Attrs()[2],
+			Func:  fn.FromExpr(fn.AddExp(fn.IdentityExp(0), fn.IdentityExp(1)), 2),
+		})
+
+	case "f", "g":
+		fds = append(fds, CoreFD{
+			Dom:   []Attribute{r.Attrs()[0], r.Attrs()[1]},
+			Codom: r.Attrs()[2],
+			Func:  fn.BlackBox(r.ID(), 2),
+		})
+	}
+
+	return fds
+}
+
+func (r *Relation) AppearsInABody() bool {
 	return len(r.bodyRules) > 0
 }
 

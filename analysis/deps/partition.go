@@ -70,7 +70,7 @@ func DistibutionPolicies(s *engine.State) []DistPolicy {
 	policies := SetFunc[distPolicy]{equal: distPolicyEqual}
 	for _, rel := range s.NonEDBRelations() {
 		// Skip any relations which only appear in the head
-		if !rel.AppearsInBody() {
+		if !rel.AppearsInABody() {
 			continue
 		}
 		for _, a := range rel.Attrs() {
@@ -94,7 +94,7 @@ func DistibutionPolicies(s *engine.State) []DistPolicy {
 		// policy but appear in the same rule as some relation in this policy.
 		rWithNoPartFunc := Set[*engine.Relation]{}
 		for _, rel := range s.NonEDBRelations() {
-			if !rel.AppearsInBody() {
+			if !rel.AppearsInABody() {
 				continue
 			}
 			if _, ok := policy[rel]; ok {
