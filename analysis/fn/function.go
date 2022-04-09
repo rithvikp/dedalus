@@ -1,4 +1,4 @@
-package deps
+package fn
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 )
 
 // TODO: Some of this functionality is duplicated by the runtime's internal expression system.
-type Function struct {
+type Func struct {
 	DomainDim   int
 	CodomainDim int
 	exp         Expression
@@ -17,25 +17,25 @@ type Function struct {
 
 type Expression interface {
 	Eval(input []int) int
-	Replace(replacements map[int]Expression) Expression
+	replace(replacements map[int]Expression) Expression
 	String() string
 }
 
-func (f Function) String() string {
+func (f Func) String() string {
 	return fmt.Sprintf("{ Dom: %d, Codom: %d, Exp: %v }", f.DomainDim, f.CodomainDim, f.exp)
 }
 
-func (f *Function) Clone() Function {
+func (f *Func) Clone() Func {
 	g := *f
 
 	return g
 }
 
-func (f *Function) Eval(x []int) int {
+func (f *Func) Eval(x []int) int {
 	return f.exp.Eval(x)
 }
 
-func (f *Function) MergeDomain(indices []int) {
+func (f *Func) MergeDomain(indices []int) {
 	if len(indices) == 0 {
 		return
 	}
@@ -48,16 +48,16 @@ func (f *Function) MergeDomain(indices []int) {
 	for i := 1; i < len(indices); i++ {
 		replacements[indices[i]] = IdentityExp(min)
 	}
-	f.exp = f.exp.Replace(replacements)
+	f.exp = f.exp.replace(replacements)
 }
 
-func (f *Function) AddToDomain(n int) {
+func (f *Func) AddToDomain(n int) {
 	f.DomainDim += n
 }
 
-func (f *Function) FunctionSubstitution(substIndex int, domIndices []int, g Function) {
+func (f *Func) SubstituteFunc(substIndex int, domIndices []int, g Func) {
 	// First update g's expression so that any indices are now with respect to f's domain
-	gReplacements := map[int]Expression{}
+	greplacements := map[int]Expression{}
 	for i, index := range domIndices {
 		if index == substIndex {
 			panic("The index being substituted cannot also be an input to the replacement function")
@@ -65,7 +65,7 @@ func (f *Function) FunctionSubstitution(substIndex int, domIndices []int, g Func
 		if index > substIndex {
 			index -= 1
 		}
-		gReplacements[i] = IdentityExp(index)
+		greplacements[i] = IdentityExp(index)
 	}
 
 	// Remove substIndex from f's domain and substitute in the transformed expression for g
@@ -73,29 +73,32 @@ func (f *Function) FunctionSubstitution(substIndex int, domIndices []int, g Func
 	for i := substIndex + 1; i < f.DomainDim; i++ {
 		replacements[i] = IdentityExp(i - 1)
 	}
-	replacements[substIndex] = g.exp.Replace(gReplacements)
-	f.exp = f.exp.Replace(replacements)
+	replacements[substIndex] = g.exp.replace(greplacements)
+	f.exp = f.exp.replace(replacements)
 
 	f.DomainDim -= 1
 }
-
-func IdentityFunc() Function {
-	return ExprFunc(IdentityExp(0), 1)
+func (f *Func) DangerouslyReplaceExp(replacements map[int]Expression) {
+	f.exp = f.exp.replace(replacements)
 }
 
-func ConstFunc(val int) Function {
-	return ExprFunc(number(val), 0)
+func Identity() Func {
+	return FromExpr(IdentityExp(0), 1)
 }
 
-func BlackBoxFunc(id string, domainDim int) Function {
+func Const(val int) Func {
+	return FromExpr(Number(val), 0)
+}
+
+func BlackBox(id string, domainDim int) Func {
 	indices := make([]int, domainDim)
 	for i := 0; i < domainDim; i++ {
 		indices[i] = i
 	}
-	return ExprFunc(BlackBoxExp(id, indices), domainDim)
+	return FromExpr(BlackBoxExp(id, indices), domainDim)
 }
 
-func NestedBlackBoxFunc(id string, domainDim, blackBoxDomainDim int, transformations map[int]Expression) Function {
+func NestedBlackBox(id string, domainDim, blackBoxDomainDim int, transformations map[int]Expression) Func {
 	inputs := make([]Expression, blackBoxDomainDim)
 	for i := 0; i < blackBoxDomainDim; i++ {
 		if exp, ok := transformations[i]; ok {
@@ -104,23 +107,18 @@ func NestedBlackBoxFunc(id string, domainDim, blackBoxDomainDim int, transformat
 			inputs[i] = IdentityExp(i)
 		}
 	}
-	return ExprFunc(BlackBoxExpWithInputs(id, inputs), domainDim)
+	return FromExpr(BlackBoxExpWithInputs(id, inputs), domainDim)
 }
 
-func ExprFunc(exp Expression, domainDim int) Function {
-	dToI := make([]Set[int], domainDim)
-	for i := 0; i < domainDim; i++ {
-		dToI[i] = Set[int]{i: true}
-	}
-
-	return Function{
+func FromExpr(exp Expression, domainDim int) Func {
+	return Func{
 		DomainDim:   domainDim,
 		CodomainDim: 1,
 		exp:         exp,
 	}
 }
 
-func funcEqual(a, b Function) bool {
+func Equal(a, b Func) bool {
 	if a.DomainDim != b.DomainDim {
 		return false
 	} else if a.CodomainDim != b.CodomainDim {
@@ -179,10 +177,10 @@ type blackBox struct {
 	inputs []Expression
 }
 
-func (b blackBox) Replace(replacements map[int]Expression) Expression {
+func (b blackBox) replace(replacements map[int]Expression) Expression {
 	newInputs := make([]Expression, len(b.inputs))
 	for i, input := range b.inputs {
-		newInputs[i] = input.Replace(replacements)
+		newInputs[i] = input.replace(replacements)
 	}
 	return blackBox{id: b.id, inputs: newInputs}
 }
@@ -212,7 +210,7 @@ type binOp struct {
 	op string
 }
 
-type number int
+type Number int
 
 type identity struct {
 	index int
@@ -233,10 +231,10 @@ func (b binOp) Eval(input []int) int {
 	return 0
 }
 
-func (b binOp) Replace(replacements map[int]Expression) Expression {
+func (b binOp) replace(replacements map[int]Expression) Expression {
 	return binOp{
-		e1: b.e1.Replace(replacements),
-		e2: b.e2.Replace(replacements),
+		e1: b.e1.replace(replacements),
+		e2: b.e2.replace(replacements),
 		op: b.op,
 	}
 }
@@ -245,15 +243,15 @@ func (b binOp) String() string {
 	return fmt.Sprintf("(%v) %v (%v)", b.e1, b.op, b.e2)
 }
 
-func (n number) Eval(input []int) int {
+func (n Number) Eval(input []int) int {
 	return int(n)
 }
 
-func (n number) Replace(replacements map[int]Expression) Expression {
+func (n Number) replace(replacements map[int]Expression) Expression {
 	return n
 }
 
-func (n number) String() string {
+func (n Number) String() string {
 	return strconv.Itoa(int(n))
 }
 
@@ -261,7 +259,7 @@ func (i identity) Eval(input []int) int {
 	return input[i.index]
 }
 
-func (i identity) Replace(replacements map[int]Expression) Expression {
+func (i identity) replace(replacements map[int]Expression) Expression {
 	if exp, ok := replacements[i.index]; ok {
 		return exp
 	}

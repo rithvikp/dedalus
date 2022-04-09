@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rithvikp/dedalus/analysis/fn"
 	"github.com/rithvikp/dedalus/ast"
 	"github.com/rithvikp/dedalus/engine"
 )
@@ -45,7 +46,7 @@ func TestFDs(t *testing.T) {
 				fds[rl.Head()].Add(FD{
 					Dom:   []engine.Attribute{rl.Head().Attrs()[0], rl.Head().Attrs()[1]},
 					Codom: rl.Head().Attrs()[2],
-					f:     BlackBoxFunc("f", 2),
+					f:     fn.BlackBox("f", 2),
 				})
 
 				return fds
@@ -61,12 +62,12 @@ func TestFDs(t *testing.T) {
 				fds[rl.Head()].Add(FD{
 					Dom:   []engine.Attribute{rl.Head().Attrs()[0], rl.Head().Attrs()[1]},
 					Codom: rl.Head().Attrs()[2],
-					f:     BlackBoxFunc("f", 2),
+					f:     fn.BlackBox("f", 2),
 				})
 				fds[rl.Head()].Add(FD{
 					Dom:   []engine.Attribute{rl.Head().Attrs()[3], rl.Head().Attrs()[4]},
 					Codom: rl.Head().Attrs()[5],
-					f:     BlackBoxFunc("g", 2),
+					f:     fn.BlackBox("g", 2),
 				})
 
 				return fds
@@ -177,7 +178,7 @@ func TestDeps(t *testing.T) {
 					vFDs = append(vFDs, varFD{
 						Dom:   []*engine.Variable{v},
 						Codom: v,
-						f:     IdentityFunc(),
+						f:     fn.Identity(),
 					})
 				}
 
@@ -195,14 +196,14 @@ func TestDeps(t *testing.T) {
 					vFDs = append(vFDs, varFD{
 						Dom:   []*engine.Variable{v},
 						Codom: v,
-						f:     IdentityFunc(),
+						f:     fn.Identity(),
 					})
 				}
 
 				vFDs = append(vFDs, varFD{
 					Dom:   []*engine.Variable{rl.HeadVars()[0]},
 					Codom: rl.HeadVars()[1],
-					f:     ExprFunc(AddExp(IdentityExp(0), number(1)), 1),
+					f:     fn.FromExpr(fn.AddExp(fn.IdentityExp(0), fn.Number(1)), 1),
 				})
 
 				s := &SetFunc[varFD]{equal: varFDEqual}
@@ -219,14 +220,14 @@ func TestDeps(t *testing.T) {
 					vFDs = append(vFDs, varFD{
 						Dom:   []*engine.Variable{v},
 						Codom: v,
-						f:     IdentityFunc(),
+						f:     fn.Identity(),
 					})
 				}
 
 				vFDs = append(vFDs, varFD{
 					Dom:   []*engine.Variable{rl.HeadVars()[0], rl.HeadVars()[1]},
 					Codom: rl.HeadVars()[2],
-					f:     BlackBoxFunc("f", 2),
+					f:     fn.BlackBox("f", 2),
 				})
 
 				s := &SetFunc[varFD]{equal: varFDEqual}
@@ -243,19 +244,19 @@ func TestDeps(t *testing.T) {
 					vFDs = append(vFDs, varFD{
 						Dom:   []*engine.Variable{v},
 						Codom: v,
-						f:     IdentityFunc(),
+						f:     fn.Identity(),
 					})
 				}
 
 				vFDs = append(vFDs, varFD{
 					Dom:   []*engine.Variable{rl.HeadVars()[0], rl.HeadVars()[1]},
 					Codom: rl.HeadVars()[2],
-					f:     BlackBoxFunc("f", 2),
+					f:     fn.BlackBox("f", 2),
 				})
 				vFDs = append(vFDs, varFD{
 					Dom:   []*engine.Variable{rl.HeadVars()[2], rl.HeadVars()[3]},
 					Codom: rl.HeadVars()[4],
-					f:     BlackBoxFunc("g", 2),
+					f:     fn.BlackBox("g", 2),
 				})
 
 				s := &SetFunc[varFD]{equal: varFDEqual}
@@ -295,27 +296,27 @@ func TestFuncSub(t *testing.T) {
 	g := varFD{
 		Dom:   []*engine.Variable{a},
 		Codom: b,
-		f:     ExprFunc(AddExp(IdentityExp(0), number(3)), 1),
+		f:     fn.FromExpr(fn.AddExp(fn.IdentityExp(0), fn.Number(3)), 1),
 	}
 	h := varFD{
 		Dom:   []*engine.Variable{a, b, c},
 		Codom: d,
-		f:     ExprFunc(AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2)), 3),
+		f:     fn.FromExpr(fn.AddExp(fn.AddExp(fn.IdentityExp(0), fn.IdentityExp(1)), fn.IdentityExp(2)), 3),
 	}
 	f := varFD{
 		Dom:   []*engine.Variable{a, b, c, d},
 		Codom: e,
-		f:     ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2)), IdentityExp((3))), 4),
+		f:     fn.FromExpr(fn.AddExp(fn.AddExp(fn.AddExp(fn.IdentityExp(0), fn.IdentityExp(1)), fn.IdentityExp(2)), fn.IdentityExp((3))), 4),
 	}
 	y := varFD{
 		Dom:   []*engine.Variable{c},
 		Codom: d,
-		f:     ExprFunc(AddExp(IdentityExp(0), number(2)), 1),
+		f:     fn.FromExpr(fn.AddExp(fn.IdentityExp(0), fn.Number(2)), 1),
 	}
 	z := varFD{
 		Dom:   []*engine.Variable{d},
 		Codom: e,
-		f:     ExprFunc(AddExp(IdentityExp(0), number(3)), 1),
+		f:     fn.FromExpr(fn.AddExp(fn.IdentityExp(0), fn.Number(3)), 1),
 	}
 
 	tests := []struct {
@@ -329,7 +330,7 @@ func TestFuncSub(t *testing.T) {
 			output: varFD{
 				Dom:   []*engine.Variable{a, c},
 				Codom: d,
-				f:     ExprFunc(AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1)), 2),
+				f:     fn.FromExpr(fn.AddExp(fn.AddExp(fn.IdentityExp(0), fn.AddExp(fn.IdentityExp(0), fn.Number(3))), fn.IdentityExp(1)), 2),
 			},
 		},
 		{
@@ -338,7 +339,7 @@ func TestFuncSub(t *testing.T) {
 			output: varFD{
 				Dom:   []*engine.Variable{a, b, c},
 				Codom: e,
-				f:     ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2)), AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2))), 3),
+				f:     fn.FromExpr(fn.AddExp(fn.AddExp(fn.AddExp(fn.IdentityExp(0), fn.IdentityExp(1)), fn.IdentityExp(2)), fn.AddExp(fn.AddExp(fn.IdentityExp(0), fn.IdentityExp(1)), fn.IdentityExp(2))), 3),
 			},
 		},
 		{
@@ -347,7 +348,7 @@ func TestFuncSub(t *testing.T) {
 			output: varFD{
 				Dom:   []*engine.Variable{a, c},
 				Codom: e,
-				f:     ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1)), AddExp(IdentityExp(1), number(2))), 2),
+				f:     fn.FromExpr(fn.AddExp(fn.AddExp(fn.AddExp(fn.IdentityExp(0), fn.AddExp(fn.IdentityExp(0), fn.Number(3))), fn.IdentityExp(1)), fn.AddExp(fn.IdentityExp(1), fn.Number(2))), 2),
 			},
 		},
 		{
@@ -356,7 +357,7 @@ func TestFuncSub(t *testing.T) {
 			output: varFD{
 				Dom:   []*engine.Variable{a, b, c},
 				Codom: e,
-				f:     ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2)), number(3)), 3),
+				f:     fn.FromExpr(fn.AddExp(fn.AddExp(fn.AddExp(fn.IdentityExp(0), fn.IdentityExp(1)), fn.IdentityExp(2)), fn.Number(3)), 3),
 			},
 		},
 		{
@@ -365,8 +366,8 @@ func TestFuncSub(t *testing.T) {
 			output: varFD{
 				Dom:   []*engine.Variable{a, c},
 				Codom: e,
-				f: ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1)),
-					AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1))), 2),
+				f: fn.FromExpr(fn.AddExp(fn.AddExp(fn.AddExp(fn.IdentityExp(0), fn.AddExp(fn.IdentityExp(0), fn.Number(3))), fn.IdentityExp(1)),
+					fn.AddExp(fn.AddExp(fn.IdentityExp(0), fn.AddExp(fn.IdentityExp(0), fn.Number(3))), fn.IdentityExp(1))), 2),
 			},
 		},
 		{
@@ -377,8 +378,8 @@ func TestFuncSub(t *testing.T) {
 			output: varFD{
 				Dom:   []*engine.Variable{a, c},
 				Codom: e,
-				f: ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1)),
-					AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1))), 2),
+				f: fn.FromExpr(fn.AddExp(fn.AddExp(fn.AddExp(fn.IdentityExp(0), fn.AddExp(fn.IdentityExp(0), fn.Number(3))), fn.IdentityExp(1)),
+					fn.AddExp(fn.AddExp(fn.IdentityExp(0), fn.AddExp(fn.IdentityExp(0), fn.Number(3))), fn.IdentityExp(1))), 2),
 			},
 		},
 		{
@@ -387,7 +388,7 @@ func TestFuncSub(t *testing.T) {
 			output: varFD{
 				Dom:   []*engine.Variable{a, c},
 				Codom: e,
-				f:     ExprFunc(AddExp(AddExp(AddExp(IdentityExp(0), AddExp(IdentityExp(0), number(3))), IdentityExp(1)), number(3)), 2),
+				f:     fn.FromExpr(fn.AddExp(fn.AddExp(fn.AddExp(fn.IdentityExp(0), fn.AddExp(fn.IdentityExp(0), fn.Number(3))), fn.IdentityExp(1)), fn.Number(3)), 2),
 			},
 		},
 	}
@@ -416,14 +417,14 @@ func TestConstSub(t *testing.T) {
 	h := varOrAttrFD{
 		Dom:   []varOrAttr{a, b, c},
 		Codom: d,
-		f:     ExprFunc(AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(2)), 3),
+		f:     fn.FromExpr(fn.AddExp(fn.AddExp(fn.IdentityExp(0), fn.IdentityExp(1)), fn.IdentityExp(2)), 3),
 	}
 
 	// h(a,b,c) --> h(a,b,3)
 	want := varOrAttrFD{
 		Dom:   []varOrAttr{a, c},
 		Codom: d,
-		f:     ExprFunc(AddExp(AddExp(IdentityExp(0), number(3)), IdentityExp(1)), 2),
+		f:     fn.FromExpr(fn.AddExp(fn.AddExp(fn.IdentityExp(0), fn.Number(3)), fn.IdentityExp(1)), 2),
 	}
 	got := constSub(h, 3, *b.Attr)
 	if !varOrAttrFDEqual(got, want) {

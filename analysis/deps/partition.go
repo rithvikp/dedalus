@@ -3,6 +3,7 @@ package deps
 import (
 	"strings"
 
+	"github.com/rithvikp/dedalus/analysis/fn"
 	"github.com/rithvikp/dedalus/engine"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
@@ -15,7 +16,7 @@ var (
 
 type DistFunction struct {
 	Dom []engine.Attribute
-	f   Function
+	f   fn.Func
 }
 
 func (f DistFunction) String() string {
@@ -36,7 +37,7 @@ func (f DistFunction) String() string {
 
 func DistFunctionEqual(a, b DistFunction) bool {
 	equal := slices.Equal(a.Dom, b.Dom)
-	equal = equal && funcEqual(a.f, b.f)
+	equal = equal && fn.Equal(a.f, b.f)
 	return equal
 }
 
@@ -207,6 +208,6 @@ func haveSharedRules(r1, r2 *engine.Relation) bool {
 func modOnAttr(a engine.Attribute) PartitionFunc {
 	return PartitionFunc{
 		Dom: []engine.Attribute{a},
-		f:   IdentityFunc(),
+		f:   fn.Identity(),
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rithvikp/dedalus/analysis/fn"
 	"github.com/rithvikp/dedalus/engine"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
@@ -133,7 +134,7 @@ type DepIO interface {
 type Dep[IO DepIO] struct {
 	Dom           []IO
 	Codom         IO
-	f             Function
+	f             fn.Func
 	substitutions map[IO]Dep[IO]
 }
 
@@ -182,17 +183,17 @@ func (d Dep[IO]) Normalize() Dep[IO] {
 			newPositions[a] = i
 		}
 
-		replacements := map[int]Expression{}
+		replacements := map[int]fn.Expression{}
 		for i := 0; i < len(d.Dom); i++ {
 			newIndex := newPositions[d.Dom[i]]
 			if newIndex != i {
-				replacements[i] = IdentityExp(newIndex)
+				replacements[i] = fn.IdentityExp(newIndex)
 			}
 		}
 
 		if len(replacements) > 0 {
 			d.Dom = sortedDom
-			d.f.exp = d.f.exp.Replace(replacements)
+			d.f.DangerouslyReplaceExp(replacements)
 		}
 	}
 	return d
@@ -201,7 +202,7 @@ func (d Dep[IO]) Normalize() Dep[IO] {
 func depEqual[IO DepIO](a, b Dep[IO]) bool {
 	equal := slices.Equal(a.Dom, b.Dom)
 	equal = equal && a.Codom == b.Codom
-	equal = equal && funcEqual(a.f, b.f)
+	equal = equal && fn.Equal(a.f, b.f)
 	// The substitutions map is specifically not checked as "how" the fd got to its current state
 	// does not affect the equality condition.
 
@@ -392,21 +393,21 @@ func Deps(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[FD], includ
 				fd := FD{
 					Dom:   []engine.Attribute{rel.Attrs()[0], rel.Attrs()[1]},
 					Codom: rel.Attrs()[2],
-					f:     ExprFunc(AddExp(IdentityExp(0), IdentityExp(1)), 2),
+					f:     fn.FromExpr(fn.AddExp(fn.IdentityExp(0), fn.IdentityExp(1)), 2),
 				}
 				basicDeps.Add(fd)
 			case "sub":
 				fd := FD{
 					Dom:   []engine.Attribute{rel.Attrs()[0], rel.Attrs()[1]},
 					Codom: rel.Attrs()[2],
-					f:     ExprFunc(SubExp(IdentityExp(0), IdentityExp(1)), 2),
+					f:     fn.FromExpr(fn.SubExp(fn.IdentityExp(0), fn.IdentityExp(1)), 2),
 				}
 				basicDeps.Add(fd)
 			case "f", "g":
 				fd := FD{
 					Dom:   []engine.Attribute{rel.Attrs()[0], rel.Attrs()[1]},
 					Codom: rel.Attrs()[2],
-					f:     BlackBoxFunc(rel.ID(), 2),
+					f:     fn.BlackBox(rel.ID(), 2),
 				}
 				basicDeps.Add(fd)
 			default:
@@ -427,7 +428,7 @@ func Deps(rl *engine.Rule, existingFDs map[*engine.Relation]*SetFunc[FD], includ
 			fd := FD{
 				Dom:   []engine.Attribute{a},
 				Codom: a,
-				f:     IdentityFunc(),
+				f:     fn.Identity(),
 			}
 			basicDeps.Add(fd)
 		}
@@ -516,7 +517,7 @@ func funcSub[IO DepIO](sub Dep[IO], dep Dep[IO]) Dep[IO] {
 			found = true
 
 			newDep.f.AddToDomain(len(newVars))
-			newDep.f.FunctionSubstitution(i, subDomIndices, sub.f)
+			newDep.f.SubstituteFunc(i, subDomIndices, sub.f)
 		} else {
 			newDep.Dom = append(newDep.Dom, v)
 		}
@@ -560,7 +561,7 @@ func varSub(vafd varOrAttrFD, v *engine.Variable, a engine.Attribute) varOrAttrF
 func constSub(vafd varOrAttrFD, val int, a engine.Attribute) varOrAttrFD {
 	for i := 0; i < len(vafd.Dom); i++ {
 		if vafd.Dom[i].Attr != nil && *vafd.Dom[i].Attr == a {
-			vafd.f.FunctionSubstitution(i, []int{}, ConstFunc(val))
+			vafd.f.SubstituteFunc(i, []int{}, fn.Const(val))
 			vafd.Dom = slices.Delete(vafd.Dom, i, i+1)
 			i--
 		}

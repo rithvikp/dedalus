@@ -1,23 +1,23 @@
-package deps
+package fn
 
 import "testing"
 
-func TestFunctionEval(t *testing.T) {
+func TestFuncEval(t *testing.T) {
 	tests := []struct {
 		msg     string
-		f       Function
+		f       Func
 		inputs  [][]int
 		outputs []int
 	}{
 		{
 			msg:     "identity function",
-			f:       IdentityFunc(),
+			f:       Identity(),
 			inputs:  [][]int{{1}, {0}},
 			outputs: []int{1, 0},
 		},
 		{
 			msg:     "add function",
-			f:       ExprFunc(AddExp(IdentityExp(1), IdentityExp(3)), 5),
+			f:       FromExpr(AddExp(IdentityExp(1), IdentityExp(3)), 5),
 			inputs:  [][]int{{1, 2, 3, 4, 5}, {0, -1, -5, -6, 10}},
 			outputs: []int{6, -7},
 		},
@@ -37,24 +37,24 @@ func TestFunctionEval(t *testing.T) {
 	}
 }
 
-func TestFunctionMergeDomain(t *testing.T) {
+func TestFuncMergeDomain(t *testing.T) {
 	tests := []struct {
 		msg          string
-		f            Function
+		f            Func
 		mergeIndices [][]int
 		inputs       [][]int
 		outputs      []int
 	}{
 		{
 			msg:          "function that adds input elements",
-			f:            ExprFunc(AddExp(IdentityExp(0), IdentityExp(1)), 2),
+			f:            FromExpr(AddExp(IdentityExp(0), IdentityExp(1)), 2),
 			mergeIndices: [][]int{{0, 1}},
 			inputs:       [][]int{{1}, {2}},
 			outputs:      []int{2, 4},
 		},
 		{
 			msg:          "function that adds input elements with multiple merges",
-			f:            ExprFunc(AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(3)), 5),
+			f:            FromExpr(AddExp(AddExp(IdentityExp(0), IdentityExp(1)), IdentityExp(3)), 5),
 			mergeIndices: [][]int{{0, 1}, {1, 3}},
 			inputs:       [][]int{{1, 2, 3}, {2, 5, 6}},
 			outputs:      []int{4, 9},
@@ -78,41 +78,41 @@ func TestFunctionMergeDomain(t *testing.T) {
 	}
 }
 
-func TestFuncEqual(t *testing.T) {
+func TestEqual(t *testing.T) {
 	tests := []struct {
 		msg   string
-		a     Function
-		b     Function
+		a     Func
+		b     Func
 		equal bool
 	}{
 		{
 			msg:   "two identity functions",
-			a:     IdentityFunc(),
-			b:     IdentityFunc(),
+			a:     Identity(),
+			b:     Identity(),
 			equal: true,
 		},
 		{
 			msg:   "two functions that return different elements of the input",
-			a:     ExprFunc(IdentityExp(1), 2),
-			b:     ExprFunc(IdentityExp(0), 0),
+			a:     FromExpr(IdentityExp(1), 2),
+			b:     FromExpr(IdentityExp(0), 0),
 			equal: false,
 		},
 		{
 			msg:   "two equivalent add functions (but with different exp structures)",
-			a:     ExprFunc(AddExp(AddExp(number(1), number(2)), IdentityExp(1)), 2),
-			b:     ExprFunc(AddExp(IdentityExp(1), number(3)), 2),
+			a:     FromExpr(AddExp(AddExp(Number(1), Number(2)), IdentityExp(1)), 2),
+			b:     FromExpr(AddExp(IdentityExp(1), Number(3)), 2),
 			equal: true,
 		},
 		{
 			msg:   "two different add functions",
-			a:     ExprFunc(AddExp(AddExp(number(3), number(2)), IdentityExp(1)), 2),
-			b:     ExprFunc(AddExp(IdentityExp(1), number(3)), 2),
+			a:     FromExpr(AddExp(AddExp(Number(3), Number(2)), IdentityExp(1)), 2),
+			b:     FromExpr(AddExp(IdentityExp(1), Number(3)), 2),
 			equal: false,
 		},
 		{
 			msg:   "different domain sizes",
-			a:     ExprFunc(IdentityExp(0), 2),
-			b:     ExprFunc(IdentityExp(2), 3),
+			a:     FromExpr(IdentityExp(0), 2),
+			b:     FromExpr(IdentityExp(2), 3),
 			equal: false,
 		},
 	}
@@ -120,7 +120,7 @@ func TestFuncEqual(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.msg, func(t *testing.T) {
-			if funcEqual(tt.a, tt.b) != tt.equal {
+			if Equal(tt.a, tt.b) != tt.equal {
 				// TODO: Add a string representation of the functions to the error message
 				t.Errorf("expected functions to be equal")
 			}

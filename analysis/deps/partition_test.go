@@ -3,6 +3,7 @@ package deps
 import (
 	"testing"
 
+	"github.com/rithvikp/dedalus/analysis/fn"
 	"github.com/rithvikp/dedalus/engine"
 )
 
@@ -21,8 +22,8 @@ func TestDistributionPolicy(t *testing.T) {
 
 				var policies []DistPolicy
 				policies = append(policies, DistPolicy{
-					in1: DistFunction{Dom: in1.Attrs()[0:2], f: BlackBoxFunc("f", 2)},
-					in2: DistFunction{Dom: in2.Attrs()[0:1], f: IdentityFunc()},
+					in1: DistFunction{Dom: in1.Attrs()[0:2], f: fn.BlackBox("f", 2)},
+					in2: DistFunction{Dom: in2.Attrs()[0:1], f: fn.Identity()},
 				})
 				return policies
 			},
@@ -36,11 +37,11 @@ func TestDistributionPolicy(t *testing.T) {
 
 				var policies []DistPolicy
 				policies = append(policies, DistPolicy{
-					in1: DistFunction{Dom: in1.Attrs()[0:3], f: NestedBlackBoxFunc("g", 3, 2, map[int]Expression{
-						0: BlackBoxExp("f", []int{0, 1}),
-						1: IdentityExp(2),
+					in1: DistFunction{Dom: in1.Attrs()[0:3], f: fn.NestedBlackBox("g", 3, 2, map[int]fn.Expression{
+						0: fn.BlackBoxExp("f", []int{0, 1}),
+						1: fn.IdentityExp(2),
 					})},
-					in2: DistFunction{Dom: in2.Attrs()[0:1], f: IdentityFunc()},
+					in2: DistFunction{Dom: in2.Attrs()[0:1], f: fn.Identity()},
 				})
 				return policies
 			},
@@ -57,18 +58,18 @@ func TestDistributionPolicy(t *testing.T) {
 
 				var policies []DistPolicy
 				policies = append(policies, DistPolicy{
-					in1: DistFunction{Dom: in1.Attrs()[0:3], f: NestedBlackBoxFunc("g", 3, 2, map[int]Expression{
-						0: BlackBoxExp("f", []int{0, 1}),
-						1: IdentityExp(2),
+					in1: DistFunction{Dom: in1.Attrs()[0:3], f: fn.NestedBlackBox("g", 3, 2, map[int]fn.Expression{
+						0: fn.BlackBoxExp("f", []int{0, 1}),
+						1: fn.IdentityExp(2),
 					})},
-					in2: DistFunction{Dom: in2.Attrs()[0:1], f: IdentityFunc()},
+					in2: DistFunction{Dom: in2.Attrs()[0:1], f: fn.Identity()},
 				})
 				policies = append(policies, DistPolicy{
-					in3: DistFunction{Dom: in3.Attrs()[0:3], f: NestedBlackBoxFunc("g", 3, 2, map[int]Expression{
-						0: BlackBoxExp("f", []int{0, 1}),
-						1: IdentityExp(2),
+					in3: DistFunction{Dom: in3.Attrs()[0:3], f: fn.NestedBlackBox("g", 3, 2, map[int]fn.Expression{
+						0: fn.BlackBoxExp("f", []int{0, 1}),
+						1: fn.IdentityExp(2),
 					})},
-					in4: DistFunction{Dom: in4.Attrs()[0:1], f: IdentityFunc()},
+					in4: DistFunction{Dom: in4.Attrs()[0:1], f: fn.Identity()},
 				})
 				return policies
 			},
@@ -82,7 +83,7 @@ func TestDistributionPolicy(t *testing.T) {
 				var policies []DistPolicy
 				for i := 0; i < 3; i++ {
 					policies = append(policies, DistPolicy{
-						in1: DistFunction{Dom: in1.Attrs()[i : i+1], f: IdentityFunc()},
+						in1: DistFunction{Dom: in1.Attrs()[i : i+1], f: fn.Identity()},
 					})
 				}
 				return policies
@@ -97,8 +98,8 @@ func TestDistributionPolicy(t *testing.T) {
 
 				var policies []DistPolicy
 				policies = append(policies, DistPolicy{
-					in1: DistFunction{Dom: in1.Attrs()[0:1], f: ExprFunc(AddExp(IdentityExp(0), number(1)), 1)},
-					in2: DistFunction{Dom: in2.Attrs()[0:1], f: IdentityFunc()},
+					in1: DistFunction{Dom: in1.Attrs()[0:1], f: fn.FromExpr(fn.AddExp(fn.IdentityExp(0), fn.Number(1)), 1)},
+					in2: DistFunction{Dom: in2.Attrs()[0:1], f: fn.Identity()},
 				})
 				return policies
 			},
@@ -126,10 +127,10 @@ func TestDistributionPolicy(t *testing.T) {
 
 				var policies []DistPolicy
 				policies = append(policies, DistPolicy{
-					in1: DistFunction{Dom: in1.Attrs()[0:1], f: ExprFunc(AddExp(IdentityExp(0), number(6)), 1)},
-					in2: DistFunction{Dom: in2.Attrs()[0:1], f: ExprFunc(AddExp(IdentityExp(0), number(5)), 1)},
-					in3: DistFunction{Dom: in3.Attrs()[0:1], f: ExprFunc(AddExp(IdentityExp(0), number(3)), 1)},
-					in4: DistFunction{Dom: in4.Attrs()[0:1], f: IdentityFunc()},
+					in1: DistFunction{Dom: in1.Attrs()[0:1], f: fn.FromExpr(fn.AddExp(fn.IdentityExp(0), fn.Number(6)), 1)},
+					in2: DistFunction{Dom: in2.Attrs()[0:1], f: fn.FromExpr(fn.AddExp(fn.IdentityExp(0), fn.Number(5)), 1)},
+					in3: DistFunction{Dom: in3.Attrs()[0:1], f: fn.FromExpr(fn.AddExp(fn.IdentityExp(0), fn.Number(3)), 1)},
+					in4: DistFunction{Dom: in4.Attrs()[0:1], f: fn.Identity()},
 				})
 				return policies
 			},
@@ -151,15 +152,15 @@ func TestDistributionPolicy(t *testing.T) {
 
 				var policies []DistPolicy
 				policies = append(policies, DistPolicy{
-					in1: DistFunction{Dom: in1.Attrs()[0:1], f: ExprFunc(AddExp(IdentityExp(0), number(3)), 1)},
-					in2: DistFunction{Dom: in2.Attrs()[0:1], f: ExprFunc(AddExp(IdentityExp(0), number(2)), 1)},
-					in3: DistFunction{Dom: in3.Attrs()[0:1], f: IdentityFunc()},
+					in1: DistFunction{Dom: in1.Attrs()[0:1], f: fn.FromExpr(fn.AddExp(fn.IdentityExp(0), fn.Number(3)), 1)},
+					in2: DistFunction{Dom: in2.Attrs()[0:1], f: fn.FromExpr(fn.AddExp(fn.IdentityExp(0), fn.Number(2)), 1)},
+					in3: DistFunction{Dom: in3.Attrs()[0:1], f: fn.Identity()},
 				})
 
 				policies = append(policies, DistPolicy{
-					in4: DistFunction{Dom: in4.Attrs()[0:1], f: ExprFunc(AddExp(IdentityExp(0), number(7)), 1)},
-					in5: DistFunction{Dom: in5.Attrs()[0:1], f: ExprFunc(AddExp(IdentityExp(0), number(4)), 1)},
-					in6: DistFunction{Dom: in6.Attrs()[0:1], f: IdentityFunc()},
+					in4: DistFunction{Dom: in4.Attrs()[0:1], f: fn.FromExpr(fn.AddExp(fn.IdentityExp(0), fn.Number(7)), 1)},
+					in5: DistFunction{Dom: in5.Attrs()[0:1], f: fn.FromExpr(fn.AddExp(fn.IdentityExp(0), fn.Number(4)), 1)},
+					in6: DistFunction{Dom: in6.Attrs()[0:1], f: fn.Identity()},
 				})
 				return policies
 			},
