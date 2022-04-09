@@ -6,7 +6,6 @@ import (
 	"github.com/rithvikp/dedalus/engine"
 )
 
-// TODO: This test function currently just outputs to stdout for manual inspection. This will be changed soon.
 func TestDistributionPolicy(t *testing.T) {
 	tests := []struct {
 		msg      string
@@ -28,7 +27,7 @@ func TestDistributionPolicy(t *testing.T) {
 				return policies
 			},
 		},
-		{ // TODO: Add attr. sorting + black box canonicalization
+		{
 			msg:     "Black Box: Chained dependencies",
 			program: `out(a,e,l,t) :- in1(a,b,d,l,t), f(a,b,c), g(c,d,e), in2(e,l,t)`,
 			policies: func(s *engine.State) []DistPolicy {
@@ -42,6 +41,34 @@ func TestDistributionPolicy(t *testing.T) {
 						1: IdentityExp(2),
 					})},
 					in2: DistFunction{Dom: in2.Attrs()[0:1], f: IdentityFunc()},
+				})
+				return policies
+			},
+		},
+		{
+			msg: "Black Box: Multiple rules with the same dependency",
+			program: `out(a,e,l,t) :- in1(a,b,d,l,t), f(a,b,c), g(c,d,e), in2(e,l,t)
+					  out(a,e,l,t) :- in3(a,b,d,l,t), f(a,b,c), g(c,d,e), in4(e,l,t)`,
+			policies: func(s *engine.State) []DistPolicy {
+				in1 := s.Rules()[0].Body()[0]
+				in2 := s.Rules()[0].Body()[3]
+				in3 := s.Rules()[1].Body()[0]
+				in4 := s.Rules()[1].Body()[3]
+
+				var policies []DistPolicy
+				policies = append(policies, DistPolicy{
+					in1: DistFunction{Dom: in1.Attrs()[0:3], f: NestedBlackBoxFunc("g", 3, 2, map[int]Expression{
+						0: BlackBoxExp("f", []int{0, 1}),
+						1: IdentityExp(2),
+					})},
+					in2: DistFunction{Dom: in2.Attrs()[0:1], f: IdentityFunc()},
+				})
+				policies = append(policies, DistPolicy{
+					in3: DistFunction{Dom: in3.Attrs()[0:3], f: NestedBlackBoxFunc("g", 3, 2, map[int]Expression{
+						0: BlackBoxExp("f", []int{0, 1}),
+						1: IdentityExp(2),
+					})},
+					in4: DistFunction{Dom: in4.Attrs()[0:1], f: IdentityFunc()},
 				})
 				return policies
 			},
@@ -88,10 +115,9 @@ func TestDistributionPolicy(t *testing.T) {
 		},
 		{
 			msg: "Arithmetic: 3 rules with chained dependencies",
-			program: `
-				out1(a,c,l,t) :- in1(a,l,t), add(a,1,c), in2(c,l,t)
-				out2(a,c,l,t) :- in2(a,l,t), add(a,2,c), in3(c,l,t)
-				out3(a,c,l,t) :- in3(a,l,t), add(a,3,c), in4(c,l,t)`,
+			program: `out1(a,c,l,t) :- in1(a,l,t), add(a,1,c), in2(c,l,t)
+					  out2(a,c,l,t) :- in2(a,l,t), add(a,2,c), in3(c,l,t)
+					  out3(a,c,l,t) :- in3(a,l,t), add(a,3,c), in4(c,l,t)`,
 			policies: func(s *engine.State) []DistPolicy {
 				in1 := s.Rules()[0].Body()[0]
 				in2 := s.Rules()[0].Body()[2]
@@ -110,11 +136,10 @@ func TestDistributionPolicy(t *testing.T) {
 		},
 		{
 			msg: "Arithmetic: 2 pairs of 2 rules with chained dependencies",
-			program: `
-				out1(a,c,l,t) :- in1(a,l,t), add(a,1,c), in2(c,l,t)
-				out2(a,c,l,t) :- in2(a,l,t), add(a,2,c), in3(c,l,t)
-				out3(a,c,l,t) :- in4(a,l,t), add(a,3,c), in5(c,l,t)
-				out4(a,c,l,t) :- in5(a,l,t), add(a,4,c), in6(c,l,t)`,
+			program: `out1(a,c,l,t) :- in1(a,l,t), add(a,1,c), in2(c,l,t)
+					  out2(a,c,l,t) :- in2(a,l,t), add(a,2,c), in3(c,l,t)
+					  out3(a,c,l,t) :- in4(a,l,t), add(a,3,c), in5(c,l,t)
+					  out4(a,c,l,t) :- in5(a,l,t), add(a,4,c), in6(c,l,t)`,
 			policies: func(s *engine.State) []DistPolicy {
 				in1 := s.Rules()[0].Body()[0]
 				in2 := s.Rules()[0].Body()[2]

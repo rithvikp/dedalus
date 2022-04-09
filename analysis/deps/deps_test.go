@@ -28,25 +28,6 @@ func stateFromProgram(t *testing.T, program string) *engine.State {
 	return s
 }
 
-var p1 = `add("1", "2", "3").
-out(a,b,c,l,t) :- in1(a,b,c,l,t)
-`
-var p2 = `add("1", "2", "3").
-out(a,b,c,l,t) :- in1(a,b,c,l,t), add(a,b,c)
-`
-var p3 = `add("1", "2", "3").
-out(a,b,c,c,l,t) :- in1(a,b,c,l,t), add(a,b,c)
-`
-var p4 = `add("1", "2", "3").
-out(a,b,c,c,l,t) :- in1(a,b,c,l,t), add(a,b,c)
-out(a,b,c,d,l,t) :- in2(a,b,c,d,l,t), add(a,b,c)
-`
-
-var p5 = `add("1", "2", "3").
-out(a,c,l,t) :- in1(a,l,t), add(a,1,c)
-`
-var p = p5
-
 func TestFDs(t *testing.T) {
 	tests := []struct {
 		msg     string
