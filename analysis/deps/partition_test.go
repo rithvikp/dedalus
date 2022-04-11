@@ -3,9 +3,63 @@ package deps
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/rithvikp/dedalus/analysis/fn"
 	"github.com/rithvikp/dedalus/engine"
 )
+
+func TestDistPolicyRules(t *testing.T) {
+	tests := []struct {
+		msg       string
+		program   string
+		distRules []string
+	}{
+		{
+			msg:     "Reflexive distribution",
+			program: `out(a,b,l,t) :- in1(a,b,l,t)`,
+			distRules: []string{
+				`in1(a,b,l',t') :- in1(a,b,l,t), locs(a,l'), choose((a,b,l'), t')`,
+				`in1(a,b,l',t') :- in1(a,b,l,t), locs(b,l'), choose((a,b,l'), t')`,
+			},
+		},
+		{
+			msg:     "Single black-box policy",
+			program: `out(a,d,l,t) :- in1(a,b,l,t), f(a,b,c), in2(c,d,l,t)`,
+			distRules: []string{
+				`in1(a,b,l',t') :- in1(a,b,l,t), f(a,b,c), locs(c,l'), choose((a,b,l'), t')`,
+				`in2(a,b,l',t') :- in2(a,b,l,t), locs(a,l'), choose((a,b,l'), t')`,
+			},
+		},
+		{
+			msg:     "Chained black-box policy",
+			program: `out(a,f,l,t) :- in1(a,b,d,l,t), f(a,b,c), g(c,d,e), in2(e,f,l,t)`,
+			distRules: []string{
+				// Note how the variable names are generated sequentially from left-to-right
+				`in1(a,b,c,l',t') :- in1(a,b,c,l,t), f(a,b,d), g(d,c,e), locs(e,l'), choose((a,b,c,l'), t')`,
+				`in2(a,b,l',t') :- in2(a,b,l,t), locs(a,l'), choose((a,b,l'), t')`,
+			},
+		},
+		//FIXME: program: `out(a,f,l,t) :- in1(a,b,l,t), f(a,b,c), g(c,d,e), in2(e,f,l,t)`,
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.msg, func(t *testing.T) {
+			s := stateFromProgram(t, preface+"\n"+tt.program)
+			policies := DistibutionPolicies(s)
+			var got []string
+			for _, p := range policies {
+				got = append(got, p.Rules()...)
+			}
+
+			if diff := cmp.Diff(got, tt.distRules, cmpopts.SortSlices(func(a, b string) bool { return a < b })); diff != "" {
+				t.Errorf("Generated distribution rules not equal (-got, +want):\n%s", diff)
+			}
+		})
+
+	}
+}
 
 func TestDistributionPolicy(t *testing.T) {
 	tests := []struct {
@@ -22,7 +76,7 @@ func TestDistributionPolicy(t *testing.T) {
 
 				var policies []DistPolicy
 				policies = append(policies, DistPolicy{
-					in1: DistFunction{Dom: in1.Attrs()[0:2], f: fn.BlackBox("f", 2)},
+					in1: DistFunction{Dom: in1.Attrs()[0:2], f: fn.BlackBox("f", 2, nil)},
 					in2: DistFunction{Dom: in2.Attrs()[0:1], f: fn.Identity()},
 				})
 				return policies
@@ -38,9 +92,9 @@ func TestDistributionPolicy(t *testing.T) {
 				var policies []DistPolicy
 				policies = append(policies, DistPolicy{
 					in1: DistFunction{Dom: in1.Attrs()[0:3], f: fn.NestedBlackBox("g", 3, 2, map[int]fn.Expression{
-						0: fn.BlackBoxExp("f", []int{0, 1}),
+						0: fn.BlackBoxExp("f", []int{0, 1}, nil),
 						1: fn.IdentityExp(2),
-					})},
+					}, nil)},
 					in2: DistFunction{Dom: in2.Attrs()[0:1], f: fn.Identity()},
 				})
 				return policies
@@ -59,16 +113,16 @@ func TestDistributionPolicy(t *testing.T) {
 				var policies []DistPolicy
 				policies = append(policies, DistPolicy{
 					in1: DistFunction{Dom: in1.Attrs()[0:3], f: fn.NestedBlackBox("g", 3, 2, map[int]fn.Expression{
-						0: fn.BlackBoxExp("f", []int{0, 1}),
+						0: fn.BlackBoxExp("f", []int{0, 1}, nil),
 						1: fn.IdentityExp(2),
-					})},
+					}, nil)},
 					in2: DistFunction{Dom: in2.Attrs()[0:1], f: fn.Identity()},
 				})
 				policies = append(policies, DistPolicy{
 					in3: DistFunction{Dom: in3.Attrs()[0:3], f: fn.NestedBlackBox("g", 3, 2, map[int]fn.Expression{
-						0: fn.BlackBoxExp("f", []int{0, 1}),
+						0: fn.BlackBoxExp("f", []int{0, 1}, nil),
 						1: fn.IdentityExp(2),
-					})},
+					}, nil)},
 					in4: DistFunction{Dom: in4.Attrs()[0:1], f: fn.Identity()},
 				})
 				return policies

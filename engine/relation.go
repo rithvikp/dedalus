@@ -33,6 +33,10 @@ type Attribute struct {
 	index    int
 }
 
+func (a Attribute) Relation() *Relation {
+	return a.relation
+}
+
 func (a Attribute) String() string {
 	id := "<nil>"
 	if a.relation != nil {
@@ -107,7 +111,7 @@ func (r *Relation) CoreFDs() []CoreFD {
 		fds = append(fds, CoreFD{
 			Dom:   []Attribute{r.Attrs()[0], r.Attrs()[1]},
 			Codom: r.Attrs()[2],
-			Func:  fn.BlackBox(r.ID(), 2),
+			Func:  fn.BlackBox(r.ID(), 2, r.Attrs()[2]),
 		})
 	}
 

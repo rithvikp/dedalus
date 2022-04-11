@@ -78,8 +78,13 @@ func (f *Func) SubstituteFunc(substIndex int, domIndices []int, g Func) {
 
 	f.DomainDim -= 1
 }
+
 func (f *Func) DangerouslyReplaceExp(replacements map[int]Expression) {
 	f.exp = f.exp.replace(replacements)
+}
+
+func (f *Func) Exp() Expression {
+	return f.exp
 }
 
 func Identity() Func {
@@ -90,15 +95,15 @@ func Const(val int) Func {
 	return FromExpr(Number(val), 0)
 }
 
-func BlackBox(id string, domainDim int) Func {
+func BlackBox(id string, domainDim int, metadata any) Func {
 	indices := make([]int, domainDim)
 	for i := 0; i < domainDim; i++ {
 		indices[i] = i
 	}
-	return FromExpr(BlackBoxExp(id, indices), domainDim)
+	return FromExpr(BlackBoxExp(id, indices, metadata), domainDim)
 }
 
-func NestedBlackBox(id string, domainDim, blackBoxDomainDim int, transformations map[int]Expression) Func {
+func NestedBlackBox(id string, domainDim, blackBoxDomainDim int, transformations map[int]Expression, metadata any) Func {
 	inputs := make([]Expression, blackBoxDomainDim)
 	for i := 0; i < blackBoxDomainDim; i++ {
 		if exp, ok := transformations[i]; ok {
@@ -107,7 +112,7 @@ func NestedBlackBox(id string, domainDim, blackBoxDomainDim int, transformations
 			inputs[i] = IdentityExp(i)
 		}
 	}
-	return FromExpr(BlackBoxExpWithInputs(id, inputs), domainDim)
+	return FromExpr(BlackBoxExpWithInputs(id, inputs, metadata), domainDim)
 }
 
 func FromExpr(exp Expression, domainDim int) Func {
@@ -144,8 +149,7 @@ func exprEqual(a, b Expression, domainDim int) bool {
 			}
 		}
 		return true
-
-	} else if (blackBox1Ok || blackBox2Ok) && !(blackBox1Ok && blackBox2Ok) {
+	} else if blackBox1Ok || blackBox2Ok {
 		panic("Cannot compare a black box expression to one that is not also black box")
 	}
 
@@ -173,8 +177,9 @@ func exprEqual(a, b Expression, domainDim int) bool {
 }
 
 type blackBox struct {
-	id     string
-	inputs []Expression
+	id       string
+	metadata any
+	inputs   []Expression
 }
 
 func (b blackBox) replace(replacements map[int]Expression) Expression {
@@ -182,7 +187,7 @@ func (b blackBox) replace(replacements map[int]Expression) Expression {
 	for i, input := range b.inputs {
 		newInputs[i] = input.replace(replacements)
 	}
-	return blackBox{id: b.id, inputs: newInputs}
+	return blackBox{id: b.id, metadata: b.metadata, inputs: newInputs}
 }
 
 func (b blackBox) String() string {
@@ -203,6 +208,27 @@ func (b blackBox) String() string {
 func (b blackBox) Eval(input []int) int {
 	panic("Eval is not implemented for black box expressions")
 }
+
+//func traverseBlackBoxExp(exp Expression) {
+//b, ok := exp.(blackBox)
+//if !ok {
+//panic("The provided expression was not a black-box expression.")
+//}
+
+//rel := b.metadata.(*engine.Relation)
+
+//inputs := make([]IndexOrAttr, len(b.inputs))
+//for i, input := range b.inputs {
+//if ident, ok := input.(identity); ok {
+//index := ident.index
+//inputs[i] = IndexOrAttr{Index: &index}
+//} else {
+//attr := traverseBlackBoxExp(input, visit)
+//inputs[i] = IndexOrAttr{Attr: &attr}
+//}
+//}
+//return visit(rel, inputs)
+//}
 
 type binOp struct {
 	e1 Expression
@@ -290,10 +316,11 @@ func IdentityExp(index int) Expression {
 	return identity{index: index}
 }
 
-func BlackBoxExp(id string, indices []int) Expression {
+func BlackBoxExp(id string, indices []int, metadata any) Expression {
 	b := blackBox{
-		id:     id,
-		inputs: make([]Expression, len(indices)),
+		id:       id,
+		metadata: metadata,
+		inputs:   make([]Expression, len(indices)),
 	}
 	for i, inputIndex := range indices {
 		b.inputs[i] = IdentityExp(inputIndex)
@@ -301,10 +328,41 @@ func BlackBoxExp(id string, indices []int) Expression {
 	return b
 }
 
-func BlackBoxExpWithInputs(id string, inputs []Expression) Expression {
+func BlackBoxExpWithInputs(id string, inputs []Expression, metadata any) Expression {
 	b := blackBox{
-		id:     id,
-		inputs: inputs,
+		id:       id,
+		metadata: metadata,
+		inputs:   inputs,
 	}
 	return b
+}
+
+// TODO: These internals methods are sub-optimal. Investigate improving this abstraction.
+type IndexOrExp struct {
+	Index *int
+	Exp   Expression
+}
+
+// BlackBoxInternals returns the metadata and inputs for the provided black box expression.
+func BlackBoxInternals(exp Expression) ([]IndexOrExp, any, bool) {
+	b, ok := exp.(blackBox)
+	if !ok {
+		return nil, nil, false
+	}
+
+	inputs := make([]IndexOrExp, len(b.inputs))
+	for i, input := range b.inputs {
+		if ident, ok := input.(identity); ok {
+			index := ident.index
+			inputs[i] = IndexOrExp{Index: &index}
+		} else {
+			inputs[i] = IndexOrExp{Exp: input}
+		}
+	}
+	return inputs, b.metadata, true
+}
+
+func IdentityInternals(exp Expression) (int, bool) {
+	ident, ok := exp.(identity)
+	return ident.index, ok
 }

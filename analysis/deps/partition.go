@@ -1,6 +1,7 @@
 package deps
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/rithvikp/dedalus/analysis/fn"
@@ -16,6 +17,7 @@ var (
 
 type DistFunction struct {
 	Dom []engine.Attribute
+	rel *engine.Relation
 	f   fn.Func
 }
 
@@ -59,6 +61,111 @@ func (p distPolicy) Clone() distPolicy {
 
 func distPolicyEqual(a, b distPolicy) bool {
 	return maps.EqualFunc(a, b, partitionFuncEqual)
+}
+
+func (f DistFunction) Rule() string {
+	b := strings.Builder{}
+	relBodyB := strings.Builder{}
+	chooseB := strings.Builder{}
+
+	b.WriteString(fmt.Sprintf("%s(", f.rel.ID()))
+	relBodyB.WriteString(fmt.Sprintf("%s(", f.rel.ID()))
+	chooseB.WriteString("choose((")
+
+	vChar := 'a'
+	attrsToVar := map[engine.Attribute]string{}
+	for i, a := range f.rel.Attrs() {
+		b.WriteRune(vChar)
+		relBodyB.WriteRune(vChar)
+		chooseB.WriteRune(vChar)
+
+		attrsToVar[a] = string(vChar)
+		vChar++
+
+		if i < len(f.rel.Attrs()) {
+			b.WriteString(",")
+			relBodyB.WriteString(",")
+			chooseB.WriteString(",")
+		}
+	}
+	b.WriteString("l',t') :- ")
+	relBodyB.WriteString("l,t)")
+	chooseB.WriteString("l'), t')")
+
+	b.WriteString(relBodyB.String())
+	b.WriteString(", ")
+
+	// Generate joins to implement the policy
+	visit := func(inputs []IndexOrAttr, codom engine.Attribute) {
+		b.WriteString(fmt.Sprintf("%s(", codom.Relation().ID()))
+		for _, input := range inputs {
+			var a engine.Attribute
+			if input.Index != nil {
+				a = f.Dom[*input.Index]
+			} else {
+				a = *input.Attr
+			}
+			v, ok := attrsToVar[a]
+			if !ok {
+				attrsToVar[a] = string(vChar)
+				vChar++
+			}
+			b.WriteString(fmt.Sprintf("%s,", v))
+		}
+
+		codomV := string(vChar)
+		attrsToVar[codom] = codomV
+		vChar++
+		b.WriteString(fmt.Sprintf("%s), ", codomV))
+	}
+
+	locChoiceAttr := f.traversePolicyJoins(f.f.Exp(), visit)
+
+	b.WriteString(fmt.Sprintf("locs(%s,l'), ", attrsToVar[locChoiceAttr]))
+
+	b.WriteString(chooseB.String())
+
+	return b.String()
+}
+
+type IndexOrAttr struct {
+	Index *int
+	Attr  *engine.Attribute
+}
+
+func (f DistFunction) traversePolicyJoins(exp fn.Expression, visit func(inputs []IndexOrAttr, codom engine.Attribute)) engine.Attribute {
+	index, ok := fn.IdentityInternals(exp)
+	if ok {
+		return f.Dom[index]
+	}
+	rawInputs, metadata, ok := fn.BlackBoxInternals(exp)
+	if !ok {
+		panic("The provided expression was not a black-box expression when traversing policy joins.")
+	}
+
+	codom := metadata.(engine.Attribute)
+	inputs := make([]IndexOrAttr, len(rawInputs))
+
+	for i, rawInput := range rawInputs {
+		rawInput := rawInput
+		if rawInput.Index != nil {
+			inputs[i] = IndexOrAttr{Index: rawInput.Index}
+		} else {
+			attr := f.traversePolicyJoins(rawInput.Exp, visit)
+			inputs[i] = IndexOrAttr{Attr: &attr}
+		}
+	}
+
+	visit(inputs, codom)
+	return codom
+}
+
+func (p DistPolicy) Rules() []string {
+	rules := make([]string, len(p))
+	for i, f := range maps.Values(p) {
+		rules[i] = f.Rule()
+	}
+	return rules
 }
 
 // TODO: Things to check:
@@ -184,6 +291,7 @@ func DistibutionPolicies(s *engine.State) []DistPolicy {
 		for rel, pf := range p {
 			pf = pf.Normalize()
 			finalP[rel] = DistFunction{
+				rel: rel,
 				Dom: pf.Dom,
 				f:   pf.f,
 			}

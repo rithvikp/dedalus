@@ -46,7 +46,7 @@ func TestFDs(t *testing.T) {
 				fds[rl.Head()].Add(FD{
 					Dom:   []engine.Attribute{rl.Head().Attrs()[0], rl.Head().Attrs()[1]},
 					Codom: rl.Head().Attrs()[2],
-					f:     fn.BlackBox("f", 2),
+					f:     fn.BlackBox("f", 2, nil),
 				})
 
 				return fds
@@ -62,12 +62,12 @@ func TestFDs(t *testing.T) {
 				fds[rl.Head()].Add(FD{
 					Dom:   []engine.Attribute{rl.Head().Attrs()[0], rl.Head().Attrs()[1]},
 					Codom: rl.Head().Attrs()[2],
-					f:     fn.BlackBox("f", 2),
+					f:     fn.BlackBox("f", 2, nil),
 				})
 				fds[rl.Head()].Add(FD{
 					Dom:   []engine.Attribute{rl.Head().Attrs()[3], rl.Head().Attrs()[4]},
 					Codom: rl.Head().Attrs()[5],
-					f:     fn.BlackBox("g", 2),
+					f:     fn.BlackBox("g", 2, nil),
 				})
 
 				return fds
@@ -227,7 +227,7 @@ func TestDeps(t *testing.T) {
 				vFDs = append(vFDs, varFD{
 					Dom:   []*engine.Variable{rl.HeadVars()[0], rl.HeadVars()[1]},
 					Codom: rl.HeadVars()[2],
-					f:     fn.BlackBox("f", 2),
+					f:     fn.BlackBox("f", 2, nil),
 				})
 
 				s := &SetFunc[varFD]{equal: varFDEqual}
@@ -251,12 +251,12 @@ func TestDeps(t *testing.T) {
 				vFDs = append(vFDs, varFD{
 					Dom:   []*engine.Variable{rl.HeadVars()[0], rl.HeadVars()[1]},
 					Codom: rl.HeadVars()[2],
-					f:     fn.BlackBox("f", 2),
+					f:     fn.BlackBox("f", 2, nil),
 				})
 				vFDs = append(vFDs, varFD{
 					Dom:   []*engine.Variable{rl.HeadVars()[2], rl.HeadVars()[3]},
 					Codom: rl.HeadVars()[4],
-					f:     fn.BlackBox("g", 2),
+					f:     fn.BlackBox("g", 2, nil),
 				})
 
 				s := &SetFunc[varFD]{equal: varFDEqual}
