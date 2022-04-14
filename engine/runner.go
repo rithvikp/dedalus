@@ -17,6 +17,7 @@ import (
 
 type Runner struct {
 	*State
+	currentTimestamp int
 }
 
 func NewRunner(p *ast.Program) (*Runner, error) {
@@ -29,6 +30,8 @@ func NewRunner(p *ast.Program) (*Runner, error) {
 }
 
 func (r *Runner) Step() {
+	r.executed = true
+
 	var queue []*Rule
 	inQueue := map[string]struct{}{}
 	queue = append(queue, r.rules...)

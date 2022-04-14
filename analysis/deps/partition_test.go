@@ -2,7 +2,6 @@ package deps
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -63,11 +62,17 @@ func TestDistPolicyRules(t *testing.T) {
 
 	s := stateFromProgram(t, preface+"\n"+tests[2].program)
 	policies := DistPolicies(s)
-	fmt.Println()
-	for _, p := range policies {
-		fmt.Println("=======")
-		fmt.Println(strings.Join(p.Rules(), "\n"))
-		fmt.Print("=======\n\n")
+	//fmt.Println()
+	//for _, p := range policies {
+	//fmt.Println("=======")
+	//fmt.Println(strings.Join(p.Rules(), "\n"))
+	//fmt.Print("=======\n\n")
+	//}
+	for _, rawRule := range policies[0].Rules() {
+		fmt.Println(s.AddRawRule(rawRule))
+	}
+	for _, rl := range s.Rules() {
+		fmt.Println(rl)
 	}
 }
 

@@ -28,6 +28,14 @@ func (v Variable) String() string {
 	return v.id
 }
 
+func (v *Variable) Attrs() []Attribute {
+	var attrs []Attribute
+	for _, as := range v.attrs {
+		attrs = append(attrs, as...)
+	}
+	return attrs
+}
+
 type Attribute struct {
 	relation *Relation
 	index    int
