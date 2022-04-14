@@ -95,10 +95,6 @@ func (s *State) NonEDBRelations() []*Relation {
 	return rels
 }
 
-type Runner struct {
-	*State
-}
-
 func (r *Rule) ID() string {
 	return r.id
 }

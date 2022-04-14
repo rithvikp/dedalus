@@ -68,7 +68,7 @@ func (f DistFunction) Rule() string {
 	relBodyB := strings.Builder{}
 	chooseB := strings.Builder{}
 
-	b.WriteString(fmt.Sprintf("%s(", f.rel.ID()))
+	b.WriteString(fmt.Sprintf("%s_p(", f.rel.ID()))
 	relBodyB.WriteString(fmt.Sprintf("%s(", f.rel.ID()))
 	chooseB.WriteString("choose((")
 
@@ -172,7 +172,7 @@ func (p DistPolicy) Rules() []string {
 // - Skipping relations which appear in the head
 // - Only looking at the body for shared rules
 
-func DistibutionPolicies(s *engine.State) []DistPolicy {
+func DistPolicies(s *engine.State) []DistPolicy {
 	copartDeps := CDs(s)
 	policies := SetFunc[distPolicy]{equal: distPolicyEqual}
 	for _, rel := range s.NonEDBRelations() {

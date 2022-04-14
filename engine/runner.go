@@ -15,6 +15,10 @@ import (
 
 // TODO: validate for safe negation, auto-persisted relations
 
+type Runner struct {
+	*State
+}
+
 func NewRunner(p *ast.Program) (*Runner, error) {
 	s, err := New(p)
 	if err != nil {

@@ -74,6 +74,22 @@ func TestFDs(t *testing.T) {
 			},
 		},
 		{
+			msg:     "Black Box FD where one var only appears in the contraint (in the body)",
+			program: `out(a,b,c,l,t) :- in1(a,l,t), f(a,b,c), in2(c,l,t)`,
+			fds: func(s *engine.State) map[*engine.Relation]*SetFunc[FD] {
+				fds := map[*engine.Relation]*SetFunc[FD]{}
+				rl := s.Rules()[0]
+				fds[rl.Head()] = &SetFunc[FD]{equal: fdEqual}
+				fds[rl.Head()].Add(FD{
+					Dom:   []engine.Attribute{rl.Head().Attrs()[0], rl.Head().Attrs()[1]},
+					Codom: rl.Head().Attrs()[2],
+					f:     fn.BlackBox("f", 2, nil),
+				})
+
+				return fds
+			},
+		},
+		{
 			msg:     "No FDs if relevant attributes aren't also in the head",
 			program: `out(a,c,l,t) :- in1(a,b,l,t), f(a,b,c)`,
 			fds: func(s *engine.State) map[*engine.Relation]*SetFunc[FD] {
@@ -128,42 +144,27 @@ func TestFDs(t *testing.T) {
 			}
 		})
 	}
-
-	//s := stateFromProgram(t, p)
-	//fds := FDs(s)
-	//for rel, deps := range fds {
-	//fmt.Printf("\n==============%s==============\n", rel.ID())
-	//for _, dep := range deps.Elems() {
-	//fmt.Printf("\n%v\n\n", dep)
-	//}
-	//fmt.Println("Num FDs:", len(deps.Elems()))
-	//fmt.Printf("\n============================\n")
-	//}
 }
 
-//func TestHeadFDs(t *testing.T) {
-//s := stateFromProgram(t, p)
-
-//existingFDs := map[*engine.Relation]*SetFunc[FD]{}
-//fds := HeadFDs(s.Rules()[0], existingFDs)
-//for _, dep := range fds.Elems() {
-//fmt.Printf("\n%v\n\n", dep)
-//}
-//fmt.Println("Num FDs:", len(fds.Elems()))
-//}
-
-//func TestDepsClosure(t *testing.T) {
-//s := stateFromProgram(t, p)
-
-//existingFDs := map[*engine.Relation]*SetFunc[FD]{}
-//fds := DepsClosure(s.Rules()[0], existingFDs, false)
-//for _, dep := range fds.Elems() {
-//fmt.Printf("\n%v\n\n", dep)
-//}
-//fmt.Println("Num FDs:", len(fds.Elems()))
-//}
-
 func TestDeps(t *testing.T) {
+	reflexiveDeps := func(rl *engine.Rule) []varFD {
+		var vFDs []varFD
+		for _, v := range rl.HeadVars() {
+			vFDs = append(vFDs, varFD{
+				Dom:   []*engine.Variable{v},
+				Codom: v,
+				f:     fn.Identity(),
+			})
+		}
+		return vFDs
+	}
+
+	setify := func(vFDs []varFD) *SetFunc[varFD] {
+		s := &SetFunc[varFD]{equal: varFDEqual}
+		s.Add(vFDs...)
+		return s
+	}
+
 	tests := []struct {
 		msg     string
 		program string
@@ -173,32 +174,15 @@ func TestDeps(t *testing.T) {
 			msg:     "Reflexive FDs",
 			program: `out(a,b,c,l,t) :- in1(a,b,c,l,t)`,
 			vFDs: func(rl *engine.Rule) *SetFunc[varFD] {
-				var vFDs []varFD
-				for _, v := range rl.HeadVars() {
-					vFDs = append(vFDs, varFD{
-						Dom:   []*engine.Variable{v},
-						Codom: v,
-						f:     fn.Identity(),
-					})
-				}
-
-				s := &SetFunc[varFD]{equal: varFDEqual}
-				s.Add(vFDs...)
-				return s
+				var vFDs = reflexiveDeps(rl)
+				return setify(vFDs)
 			},
 		},
 		{
 			msg:     "Operation FD",
 			program: `out(a,c,l,t) :- in1(a,l,t), add(a,1,c)`,
 			vFDs: func(rl *engine.Rule) *SetFunc[varFD] {
-				var vFDs []varFD
-				for _, v := range rl.HeadVars() {
-					vFDs = append(vFDs, varFD{
-						Dom:   []*engine.Variable{v},
-						Codom: v,
-						f:     fn.Identity(),
-					})
-				}
+				var vFDs = reflexiveDeps(rl)
 
 				vFDs = append(vFDs, varFD{
 					Dom:   []*engine.Variable{rl.HeadVars()[0]},
@@ -206,23 +190,14 @@ func TestDeps(t *testing.T) {
 					f:     fn.FromExpr(fn.AddExp(fn.IdentityExp(0), fn.Number(1)), 1),
 				})
 
-				s := &SetFunc[varFD]{equal: varFDEqual}
-				s.Add(vFDs...)
-				return s
+				return setify(vFDs)
 			},
 		},
 		{
 			msg:     "Black Box FD",
 			program: `out(a,b,c,l,t) :- in1(a,b,l,t), f(a,b,c)`,
 			vFDs: func(rl *engine.Rule) *SetFunc[varFD] {
-				var vFDs []varFD
-				for _, v := range rl.HeadVars() {
-					vFDs = append(vFDs, varFD{
-						Dom:   []*engine.Variable{v},
-						Codom: v,
-						f:     fn.Identity(),
-					})
-				}
+				var vFDs = reflexiveDeps(rl)
 
 				vFDs = append(vFDs, varFD{
 					Dom:   []*engine.Variable{rl.HeadVars()[0], rl.HeadVars()[1]},
@@ -230,23 +205,14 @@ func TestDeps(t *testing.T) {
 					f:     fn.BlackBox("f", 2, nil),
 				})
 
-				s := &SetFunc[varFD]{equal: varFDEqual}
-				s.Add(vFDs...)
-				return s
+				return setify(vFDs)
 			},
 		},
 		{
 			msg:     "Chained Black Box FD",
 			program: `out(a,b,c,d,e,l,t) :- in1(a,b,d,l,t), f(a,b,c), g(c,d,e)`,
 			vFDs: func(rl *engine.Rule) *SetFunc[varFD] {
-				var vFDs []varFD
-				for _, v := range rl.HeadVars() {
-					vFDs = append(vFDs, varFD{
-						Dom:   []*engine.Variable{v},
-						Codom: v,
-						f:     fn.Identity(),
-					})
-				}
+				var vFDs = reflexiveDeps(rl)
 
 				vFDs = append(vFDs, varFD{
 					Dom:   []*engine.Variable{rl.HeadVars()[0], rl.HeadVars()[1]},
@@ -259,9 +225,22 @@ func TestDeps(t *testing.T) {
 					f:     fn.BlackBox("g", 2, nil),
 				})
 
-				s := &SetFunc[varFD]{equal: varFDEqual}
-				s.Add(vFDs...)
-				return s
+				return setify(vFDs)
+			},
+		},
+		{
+			msg:     "Black Box FD where one var only appears in the contraint (in the body)",
+			program: `out(a,b,c,l,t) :- in1(a,l,t), f(a,b,c), in2(c,l,t)`,
+			vFDs: func(rl *engine.Rule) *SetFunc[varFD] {
+				var vFDs = reflexiveDeps(rl)
+
+				vFDs = append(vFDs, varFD{
+					Dom:   []*engine.Variable{rl.HeadVars()[0], rl.HeadVars()[1]},
+					Codom: rl.HeadVars()[2],
+					f:     fn.BlackBox("f", 2, nil),
+				})
+
+				return setify(vFDs)
 			},
 		},
 	}

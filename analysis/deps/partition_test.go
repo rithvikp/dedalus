@@ -1,6 +1,8 @@
 package deps
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -19,16 +21,16 @@ func TestDistPolicyRules(t *testing.T) {
 			msg:     "Reflexive distribution",
 			program: `out(a,b,l,t) :- in1(a,b,l,t)`,
 			distRules: []string{
-				`in1(a,b,l',t') :- in1(a,b,l,t), locs(a,l'), choose((a,b,l'), t')`,
-				`in1(a,b,l',t') :- in1(a,b,l,t), locs(b,l'), choose((a,b,l'), t')`,
+				`in1_p(a,b,l',t') :- in1(a,b,l,t), locs(a,l'), choose((a,b,l'), t')`,
+				`in1_p(a,b,l',t') :- in1(a,b,l,t), locs(b,l'), choose((a,b,l'), t')`,
 			},
 		},
 		{
 			msg:     "Single black-box policy",
 			program: `out(a,d,l,t) :- in1(a,b,l,t), f(a,b,c), in2(c,d,l,t)`,
 			distRules: []string{
-				`in1(a,b,l',t') :- in1(a,b,l,t), f(a,b,c), locs(c,l'), choose((a,b,l'), t')`,
-				`in2(a,b,l',t') :- in2(a,b,l,t), locs(a,l'), choose((a,b,l'), t')`,
+				`in1_p(a,b,l',t') :- in1(a,b,l,t), f(a,b,c), locs(c,l'), choose((a,b,l'), t')`,
+				`in2_p(a,b,l',t') :- in2(a,b,l,t), locs(a,l'), choose((a,b,l'), t')`,
 			},
 		},
 		{
@@ -36,18 +38,17 @@ func TestDistPolicyRules(t *testing.T) {
 			program: `out(a,f,l,t) :- in1(a,b,d,l,t), f(a,b,c), g(c,d,e), in2(e,f,l,t)`,
 			distRules: []string{
 				// Note how the variable names are generated sequentially from left-to-right
-				`in1(a,b,c,l',t') :- in1(a,b,c,l,t), f(a,b,d), g(d,c,e), locs(e,l'), choose((a,b,c,l'), t')`,
-				`in2(a,b,l',t') :- in2(a,b,l,t), locs(a,l'), choose((a,b,l'), t')`,
+				`in1_p(a,b,c,l',t') :- in1(a,b,c,l,t), f(a,b,d), g(d,c,e), locs(e,l'), choose((a,b,c,l'), t')`,
+				`in2_p(a,b,l',t') :- in2(a,b,l,t), locs(a,l'), choose((a,b,l'), t')`,
 			},
 		},
-		//FIXME: program: `out(a,f,l,t) :- in1(a,b,l,t), f(a,b,c), g(c,d,e), in2(e,f,l,t)`,
 	}
 
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.msg, func(t *testing.T) {
 			s := stateFromProgram(t, preface+"\n"+tt.program)
-			policies := DistibutionPolicies(s)
+			policies := DistPolicies(s)
 			var got []string
 			for _, p := range policies {
 				got = append(got, p.Rules()...)
@@ -59,9 +60,18 @@ func TestDistPolicyRules(t *testing.T) {
 		})
 
 	}
+
+	s := stateFromProgram(t, preface+"\n"+tests[2].program)
+	policies := DistPolicies(s)
+	fmt.Println()
+	for _, p := range policies {
+		fmt.Println("=======")
+		fmt.Println(strings.Join(p.Rules(), "\n"))
+		fmt.Print("=======\n\n")
+	}
 }
 
-func TestDistributionPolicy(t *testing.T) {
+func TestDistPolicies(t *testing.T) {
 	tests := []struct {
 		msg      string
 		program  string
@@ -225,7 +235,7 @@ func TestDistributionPolicy(t *testing.T) {
 		tt := tt
 		t.Run(tt.msg, func(t *testing.T) {
 			s := stateFromProgram(t, preface+"\n"+tt.program)
-			got := DistibutionPolicies(s)
+			got := DistPolicies(s)
 			want := tt.policies(s)
 
 			gotSet := &SetFunc[DistPolicy]{equal: DistPolicyEqual}
@@ -234,22 +244,8 @@ func TestDistributionPolicy(t *testing.T) {
 			wantSet.Add(want...)
 
 			if !gotSet.Equal(wantSet) {
-				t.Errorf("policies from DistributionPolicy not equal: got %+v \n\n want %+v", got, want)
+				t.Errorf("policies from DistPolicies not equal: got %+v \n\n want %+v", got, want)
 			}
 		})
 	}
-
-	//p := `
-	//as2(x,z,l',t) :- as(x,y,l,t), f(y,a,l,t), locs(l,l',a)
-	//match(x,z,l,t) :- as(x,y,l,t), f(y,a,l,t), bs(a,z,l,t)
-	//`
-	//s := stateFromProgram(t, preface+"\n"+p)
-	//policies := DistibutionPolicies(s)
-	//for _, p := range policies {
-	//fmt.Print("\n============================\n")
-	//for rel, df := range p {
-	//fmt.Printf("\n%v -> %v\n\n", rel.ID(), df)
-	//}
-	//fmt.Printf("\n============================\n")
-	//}
 }

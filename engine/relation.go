@@ -81,43 +81,6 @@ func (r *Relation) ID() string {
 	return r.id
 }
 
-func (r *Relation) IsEDB() bool {
-	return r.readOnly // FIXME
-}
-
-type CoreFD struct {
-	Dom   []Attribute
-	Codom Attribute
-	Func  fn.Func
-}
-
-// TODO: Add support for user-specified core fds
-func (r *Relation) CoreFDs() []CoreFD {
-	// Core FDs are only defined for EDBs
-	if !r.IsEDB() {
-		return nil
-	}
-
-	var fds []CoreFD
-	switch r.ID() {
-	case "add":
-		fds = append(fds, CoreFD{
-			Dom:   []Attribute{r.Attrs()[0], r.Attrs()[1]},
-			Codom: r.Attrs()[2],
-			Func:  fn.FromExpr(fn.AddExp(fn.IdentityExp(0), fn.IdentityExp(1)), 2),
-		})
-
-	case "f", "g":
-		fds = append(fds, CoreFD{
-			Dom:   []Attribute{r.Attrs()[0], r.Attrs()[1]},
-			Codom: r.Attrs()[2],
-			Func:  fn.BlackBox(r.ID(), 2, r.Attrs()[2]),
-		})
-	}
-
-	return fds
-}
-
 func (r *Relation) AppearsInABody() bool {
 	return len(r.bodyRules) > 0
 }
@@ -259,3 +222,70 @@ func (r *Relation) allAcrossSpaceTime() []*fact {
 
 	return facts
 }
+
+func (r *Relation) IsEDB() bool {
+	return r.readOnly // FIXME
+}
+
+type CoreFD struct {
+	Dom   []Attribute
+	Codom Attribute
+	Func  fn.Func
+}
+
+// TODO: Add support for user-specified core fds
+func (r *Relation) CoreFDs() []CoreFD {
+	// Core FDs are only defined for EDBs
+	if !r.IsEDB() {
+		return nil
+	}
+
+	if r.ID() == "add" {
+		return []CoreFD{{
+			Dom:   []Attribute{r.Attrs()[0], r.Attrs()[1]},
+			Codom: r.Attrs()[2],
+			Func:  fn.FromExpr(fn.AddExp(fn.IdentityExp(0), fn.IdentityExp(1)), 2),
+		}}
+	} else if r.ID() == "f" || r.ID() == "g" {
+		return []CoreFD{{
+			Dom:   []Attribute{r.Attrs()[0], r.Attrs()[1]},
+			Codom: r.Attrs()[2],
+			Func:  fn.BlackBox(r.ID(), 2, r.Attrs()[2]),
+		}}
+	}
+
+	//facts := r.allAcrossSpaceTime() // These specific facts don't actually have a location/time
+	//return coreFDs(facts, r.Attrs(), r.ID())
+	panic("Inferring Core FD's is not yet implemented")
+}
+
+//func coreFDs(facts []*fact, attrs []Attribute, id string) []CoreFD {
+//var fds []CoreFD
+//for i := 0; i < len(attrs); i++ {
+//dom := attrs[i]
+//if uniqueColumn(facts, i) {
+//for j := 0; j < len(attrs); j++ {
+//codom := attrs[j]
+//fds = append(fds, CoreFD{
+//Dom:   []Attribute{dom},
+//Codom: codom,
+//Func:  fn.BlackBox(fmt.Sprintf("%s_%d-%d_unique", id, dom.index, codom.index), 1, codom),
+//})
+//}
+//}
+//}
+//// TODO: Implement the rest of Armstrong's Axioms
+
+//return fds
+//}
+
+//func uniqueColumn(facts []*fact, index int) bool {
+//vals := map[string]bool{}
+//for _, f := range facts {
+//if _, ok := vals[f.data[index]]; !ok {
+//return false
+//}
+//vals[f.data[index]] = true
+//}
+//return true
+//}
